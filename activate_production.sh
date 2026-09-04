@@ -425,6 +425,12 @@ for candidate_domain in "$DOMAIN" "oms.nikhilkshah.me" "oms.paradoxsports.org"; 
     CERT_FILE="/etc/letsencrypt/live/${candidate_domain}/fullchain.pem"
     KEY_FILE="/etc/letsencrypt/live/${candidate_domain}/privkey.pem"
     echo -e "  ${GREEN}[✓]${RESET} Found valid SSL certificate for domain: ${candidate_domain}"
+    if command -v openssl &>/dev/null; then
+      CERT_EXPIRY=$(openssl x509 -enddate -noout -in "$CERT_FILE" 2>/dev/null | cut -d= -f2- || true)
+      if [ -n "$CERT_EXPIRY" ]; then
+        echo -e "      Certificate Expiration: ${BOLD}${CERT_EXPIRY}${RESET}"
+      fi
+    fi
     break
   fi
 done
@@ -582,11 +588,47 @@ nginx -t
 systemctl reload nginx
 echo -e "  ${GREEN}[✓]${RESET} Nginx reverse proxy configured and active."
 
+# Automated Let's Encrypt Certificate Renewal & Validation
+if command -v certbot &>/dev/null; then
+  echo -e "  [*] Checking SSL certificate renewal status (automated check)..."
+  # 'certbot renew' evaluates all certificates and only renews if within 30 days of expiry.
+  # --deploy-hook reloads Nginx ONLY if a certificate is actually successfully renewed (avoiding unnecessary restarts).
+  # --no-random-sleep-on-renew prevents arbitrary sleep delays when executing in deployment scripts.
+  RENEW_LOG=$(mktemp /tmp/certbot_renewal_XXXXXX.log 2>/dev/null || echo "/tmp/certbot_renew.log")
+  set +e
+  certbot renew --no-random-sleep-on-renew --deploy-hook "systemctl reload nginx" > "$RENEW_LOG" 2>&1
+  RENEW_STATUS=$?
+  set -e
+
+  if [ "$RENEW_STATUS" -eq 0 ]; then
+    if grep -qi "renewed" "$RENEW_LOG" 2>/dev/null; then
+      echo -e "  ${GREEN}[✓]${RESET} Certificate renewed successfully. Nginx reloaded with renewed certificate."
+    elif grep -qi "not yet due" "$RENEW_LOG" 2>/dev/null || grep -qi "no renewals were attempted" "$RENEW_LOG" 2>/dev/null; then
+      echo -e "  ${GREEN}[✓]${RESET} Certificate is healthy and up-to-date (renewal not required yet)."
+    else
+      echo -e "  ${GREEN}[✓]${RESET} Certificate renewal verification check completed successfully."
+    fi
+  else
+    echo -e "  ${YELLOW}[!] Warning: Certificate renewal check returned status code ${RENEW_STATUS}.${RESET}"
+    # Log summary safely without revealing private credentials or full stack traces
+    grep -iE "error|failed|warning" "$RENEW_LOG" 2>/dev/null | head -n 5 | sed 's/^/      /' || true
+    echo -e "      (Existing certificates remain active if not expired)"
+  fi
+  rm -f "$RENEW_LOG"
+fi
+
 # If cert was not found and domain is set and certbot is available, attempt to obtain cert automatically
 if [ -z "$CERT_FILE" ] && command -v certbot &>/dev/null && [ "$DOMAIN" != "localhost" ] && [ "$DOMAIN" != "127.0.0.1" ] && [ "$DOMAIN" != "$PUBLIC_IP" ]; then
   echo -e "  [*] Attempting automated Let's Encrypt SSL certificate issuance for ${DOMAIN}..."
   if certbot --nginx -d "${DOMAIN}" --non-interactive --agree-tos --register-unsafely-without-email --redirect 2>/dev/null; then
     echo -e "  ${GREEN}[✓]${RESET} Let's Encrypt SSL certificate obtained and activated for ${DOMAIN}!"
+    for candidate_domain in "$DOMAIN" "oms.nikhilkshah.me" "oms.paradoxsports.org"; do
+      if [ -f "/etc/letsencrypt/live/${candidate_domain}/fullchain.pem" ] && [ -f "/etc/letsencrypt/live/${candidate_domain}/privkey.pem" ]; then
+        CERT_FILE="/etc/letsencrypt/live/${candidate_domain}/fullchain.pem"
+        KEY_FILE="/etc/letsencrypt/live/${candidate_domain}/privkey.pem"
+        break
+      fi
+    done
   else
     echo -e "  ${YELLOW}[!] Note: Could not auto-acquire SSL certificate. You can run manually:${RESET}"
     echo -e "      ${BOLD}sudo certbot --nginx -d ${DOMAIN}${RESET}"
@@ -612,6 +654,7 @@ sleep 3
 
 BACKEND_UP=false
 FRONTEND_UP=false
+HTTPS_UP=false
 
 for i in {1..20}; do
   if curl -sf http://127.0.0.1:8000/health &>/dev/null; then
@@ -629,19 +672,42 @@ for i in {1..20}; do
   sleep 1
 done
 
+if [ -n "$CERT_FILE" ]; then
+  for i in {1..10}; do
+    if curl -k -sf https://127.0.0.1/health &>/dev/null || curl -k -sf "https://${DOMAIN}/health" &>/dev/null; then
+      HTTPS_UP=true
+      break
+    fi
+    sleep 1
+  done
+fi
+
 if [ "$BACKEND_UP" != true ]; then
   echo -e "  ${RED}[!] Warning: Backend health probe did not respond. Recent log:${RESET}"
   journalctl -u paradox-backend.service -n 12 --no-pager || true
 fi
 
+if [ "$FRONTEND_UP" != true ]; then
+  echo -e "  ${RED}[!] Warning: Frontend probe did not respond. Recent log:${RESET}"
+  journalctl -u paradox-frontend.service -n 12 --no-pager || true
+fi
+
+PORTAL_URL="http://${PUBLIC_IP}"
+HEALTH_URL="http://${PUBLIC_IP}/health"
+if [ "$HTTPS_UP" = true ]; then
+  PORTAL_URL="https://${DOMAIN} (or http://${PUBLIC_IP})"
+  HEALTH_URL="https://${DOMAIN}/health"
+fi
+
 echo -e "\n${GREEN}${BOLD}==============================================================================${RESET}"
 echo -e "${GREEN}${BOLD}       PARADOX SPORTS OMS IS ACTIVATED & RUNNING IN PRODUCTION!              ${RESET}"
 echo -e "${GREEN}${BOLD}==============================================================================${RESET}"
-echo -e "  • ${BOLD}Public Web Portal:${RESET}      ${CYAN}http://${PUBLIC_IP}${RESET} (or http://${DOMAIN})"
-echo -e "  • ${BOLD}Public Health Probe:${RESET}    ${CYAN}http://${PUBLIC_IP}/health${RESET}"
+echo -e "  • ${BOLD}Public Web Portal:${RESET}      ${CYAN}${PORTAL_URL}${RESET}"
+echo -e "  • ${BOLD}Public Health Probe:${RESET}    ${CYAN}${HEALTH_URL}${RESET}"
 echo -e "  • ${BOLD}Backend Status:${RESET}         $([ "$BACKEND_UP" = true ] && echo -e "${GREEN}ACTIVE (Port 8000 - Background Daemon)${RESET}" || echo -e "${RED}CHECK LOGS${RESET}")"
 echo -e "  • ${BOLD}Frontend Status:${RESET}        $([ "$FRONTEND_UP" = true ] && echo -e "${GREEN}ACTIVE (Port 3000 - Background Daemon)${RESET}" || echo -e "${RED}CHECK LOGS${RESET}")"
-echo -e "  • ${BOLD}Reverse Proxy:${RESET}          ${GREEN}ACTIVE (Nginx Port 80)${RESET}"
+echo -e "  • ${BOLD}Reverse Proxy (Port 80):${RESET} ${GREEN}ACTIVE (Nginx Reverse Proxy)${RESET}"
+echo -e "  • ${BOLD}HTTPS / SSL Status:${RESET}     $([ "$HTTPS_UP" = true ] && echo -e "${GREEN}ACTIVE (Port 443 - SSL Secured)${RESET}" || ([ -n "$CERT_FILE" ] && echo -e "${YELLOW}CONFIGURED (Verify external domain/DNS)${RESET}" || echo -e "${YELLOW}HTTP Bootstrap (No SSL Certificate)${RESET}"))"
 echo -e "  • ${BOLD}Runtime Mode:${RESET}           ${GREEN}PERMANENT SYSTEMD DAEMONS (24/7 Background)${RESET}"
 echo -e "  • ${BOLD}Service User:${RESET}           ${APP_USER}"
 echo -e "  • ${BOLD}Configuration:${RESET}          ${CONFIG_DIR}/production.env"

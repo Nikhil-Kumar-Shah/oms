@@ -1,13 +1,13 @@
 'use client';
 
 /**
- * Operational Help, FAQ & Reference Directory (/help)
- * Authoritative operational FAQs, official procedures, event manuals, and governed organization reference links.
+ * Operational Help & FAQ Directory (/help)
+ * Authoritative operational FAQs, official procedures, and event workflows.
  */
 
 import React, { useState, useEffect } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import { Card, CardContent } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -20,7 +20,6 @@ import {
   HelpCircle,
   Search,
   BookOpen,
-  FileText,
   ExternalLink,
   ChevronDown,
   ChevronUp,
@@ -29,59 +28,6 @@ import {
   Trash2,
   RefreshCw,
 } from 'lucide-react';
-
-interface ResourceLink {
-  id: string;
-  title: string;
-  desc: string;
-  category: string;
-  url: string;
-}
-
-const INITIAL_LINKS: ResourceLink[] = [
-  {
-    id: 'link-1',
-    category: 'Internal Resources',
-    title: 'Tournament Operations Manual',
-    desc: 'Standard protocols for matchday coordinators and referees',
-    url: '#',
-  },
-  {
-    id: 'link-2',
-    category: 'Internal Resources',
-    title: 'Emergency & Medical Safety SOP',
-    desc: 'First aid response, heat index rules, and incident reporting',
-    url: '#',
-  },
-  {
-    id: 'link-3',
-    category: 'Internal Resources',
-    title: 'Equipment & Ground Logistics Guide',
-    desc: 'Inventory checkout guidelines, pitch setup, and vendor coordination',
-    url: '#',
-  },
-  {
-    id: 'link-4',
-    category: 'Policies & Governance',
-    title: 'Code of Conduct & Ethics',
-    desc: 'Department behavioral standards and fair play governance',
-    url: '#',
-  },
-  {
-    id: 'link-5',
-    category: 'Policies & Governance',
-    title: 'Four-Eyes Review Guidelines',
-    desc: 'Supervisory review requirements for work reports and succession',
-    url: '#',
-  },
-  {
-    id: 'link-6',
-    category: 'Policies & Governance',
-    title: 'Data Privacy & Tenant Isolation Policy',
-    desc: 'Confidentiality standards and Event Team account scoping',
-    url: '#',
-  },
-];
 
 export default function HelpPage() {
   const { user, hasRole } = useAuth();
@@ -92,16 +38,6 @@ export default function HelpPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
-
-  // Governed Links state
-  const [links, setLinks] = useState<ResourceLink[]>(INITIAL_LINKS);
-  const [isLinkModalOpen, setIsLinkModalOpen] = useState<boolean>(false);
-  const [newLink, setNewLink] = useState<{ title: string; desc: string; category: string; url: string }>({
-    title: '',
-    desc: '',
-    category: 'Internal Resources',
-    url: '',
-  });
 
   // FAQ Editor Modal state
   const [isFaqModalOpen, setIsFaqModalOpen] = useState<boolean>(false);
@@ -255,31 +191,6 @@ export default function HelpPage() {
     }
   };
 
-  const handleAddLink = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newLink.title.trim() || !newLink.url.trim()) return;
-    const added: ResourceLink = {
-      id: `link-${Date.now()}`,
-      title: newLink.title.trim(),
-      desc: newLink.desc.trim(),
-      category: newLink.category,
-      url: newLink.url.trim(),
-    };
-    setLinks([...links, added]);
-    setNewLink({ title: '', desc: '', category: 'Internal Resources', url: '' });
-    setIsLinkModalOpen(false);
-  };
-
-  const handleDeleteLink = (id: string) => {
-    setLinks(links.filter((l) => l.id !== id));
-  };
-
-  const groupedLinks = links.reduce((acc, item) => {
-    acc[item.category] = acc[item.category] || [];
-    acc[item.category].push(item);
-    return acc;
-  }, {} as Record<string, ResourceLink[]>);
-
   return (
     <AppShell isEventTeamAllowed={true}>
       <div className="space-y-6 max-w-6xl mx-auto">
@@ -291,11 +202,11 @@ export default function HelpPage() {
                 <HelpCircle className="w-5 h-5" />
               </div>
               <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
-                Help, FAQs & Reference Directory
+                Help & Frequently Asked Questions
               </h1>
             </div>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Official operational workflows, system manuals, answers to common procedures, and policy guides.
+              Official operational workflows, system guidance, answers to common procedures, and policy FAQs.
             </p>
           </div>
 
@@ -308,16 +219,6 @@ export default function HelpPage() {
                 leftIcon={<Plus className="w-3.5 h-3.5" />}
               >
                 New FAQ
-              </Button>
-            )}
-            {canManageFaqs && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsLinkModalOpen(true)}
-                leftIcon={<Plus className="w-3.5 h-3.5 text-indigo-500" />}
-              >
-                Add Resource Link
               </Button>
             )}
           </div>
@@ -467,60 +368,6 @@ export default function HelpPage() {
           )}
         </div>
 
-        {/* Governed Important Links & Resource Manuals */}
-        <div className="space-y-3 pt-4 border-t border-zinc-200 dark:border-zinc-800">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-sky-500" />
-              Important Links & Governed Operational References
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {Object.entries(groupedLinks).map(([catName, catItems], sIdx) => (
-              <Card key={sIdx}>
-                <CardHeader className="p-4 pb-2 border-b border-zinc-100 dark:border-zinc-800">
-                  <CardTitle className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                    {catName}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 space-y-3 text-xs">
-                  {catItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700/60 flex items-start justify-between gap-3 hover:border-indigo-300 dark:hover:border-indigo-800 transition-all"
-                    >
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="space-y-0.5 flex-1 min-w-0"
-                      >
-                        <span className="font-semibold text-zinc-900 dark:text-zinc-100 block truncate hover:underline">
-                          {item.title}
-                        </span>
-                        <p className="text-zinc-500 dark:text-zinc-400 text-[11px] line-clamp-2">{item.desc}</p>
-                      </a>
-                      <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
-                        <ExternalLink className="w-3.5 h-3.5 text-zinc-400" />
-                        {canManageFaqs && (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteLink(item.id)}
-                            className="text-zinc-400 hover:text-rose-500 p-0.5"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-
         {/* FAQ Create / Edit Modal */}
         {isFaqModalOpen && (
           <Modal
@@ -637,80 +484,6 @@ export default function HelpPage() {
                 </Button>
                 <Button type="submit" variant="primary" size="sm" isLoading={faqSubmitting}>
                   {editingFaq ? 'Update FAQ' : 'Create FAQ'}
-                </Button>
-              </div>
-            </form>
-          </Modal>
-        )}
-
-        {/* Add Governed Link Modal */}
-        {isLinkModalOpen && (
-          <Modal
-            isOpen={true}
-            onClose={() => setIsLinkModalOpen(false)}
-            title="Add Governed Operational Reference"
-            description="Publish an official operational document or policy link for department members."
-          >
-            <form onSubmit={handleAddLink} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-                  Document / Link Title *
-                </label>
-                <Input
-                  required
-                  placeholder="e.g. Ground Operations Protocol 2026"
-                  value={newLink.title}
-                  onChange={(e) => setNewLink({ ...newLink, title: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-                  Category *
-                </label>
-                <select
-                  value={newLink.category}
-                  onChange={(e) => setNewLink({ ...newLink, category: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="Internal Resources">Internal Resources</option>
-                  <option value="Policies & Governance">Policies & Governance</option>
-                  <option value="Tournament Manuals">Tournament Manuals</option>
-                  <option value="Emergency Protocols">Emergency Protocols</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-                  Description
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="Brief summary of guidelines or manual contents..."
-                  value={newLink.desc}
-                  onChange={(e) => setNewLink({ ...newLink, desc: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-                  Resource URL *
-                </label>
-                <Input
-                  required
-                  placeholder="https://docs.paradox-sports.org/..."
-                  value={newLink.url}
-                  onChange={(e) => setNewLink({ ...newLink, url: e.target.value })}
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-zinc-100 dark:border-zinc-800">
-                <Button type="button" variant="outline" size="sm" onClick={() => setIsLinkModalOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" variant="primary" size="sm">
-                  Add Reference Link
                 </Button>
               </div>
             </form>

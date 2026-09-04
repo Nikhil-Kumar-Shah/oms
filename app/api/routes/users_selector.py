@@ -73,3 +73,52 @@ def resolve_audience(
     service = AudienceService(db)
     return service.resolve_audience(request, actor=current_user)
 
+
+@router.get("/{user_id}")
+def get_user_by_id_scoped(
+    user_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Direct user lookup by UUID (/api/v1/users/{user_id}).
+    Enforces strict vertical scoping for non-executive roles.
+    Returns 403 Forbidden if the requester and target do not share an authorized vertical.
+    """
+    from app.core.exceptions import ForbiddenException, EntityNotFoundException
+    from app.services.authority_service import AuthorityService
+    from app.services.user_service import UserService
+    from app.services.rbac_service import RbacService
+    from app.services.organization_service import OrganizationService
+    from app.schemas.user import UserResponse, UserRoleSummary, UserVerticalSummary
+
+    authority_service = AuthorityService(db)
+    user_service = UserService(db)
+
+    target_user = user_service.get_user_by_id(user_id)
+    if not target_user:
+        raise EntityNotFoundException("User", str(user_id))
+
+    if not authority_service.is_executive_or_admin(current_user.id):
+        if not authority_service.can_access_object(current_user, "user", target_user):
+            raise ForbiddenException("You do not have access to view this user profile")
+
+    rbac_service = RbacService(db)
+    org_service = OrganizationService(db)
+    roles = [ur.role for ur in target_user.user_roles if ur.role] if hasattr(target_user, "user_roles") and target_user.user_roles else rbac_service.get_user_roles(target_user.id)
+    verts = [(uv.vertical, uv.is_primary) for uv in target_user.user_verticals if uv.vertical] if hasattr(target_user, "user_verticals") and target_user.user_verticals else org_service.get_user_verticals(target_user.id)
+
+    return UserResponse(
+        id=target_user.id,
+        username=target_user.username,
+        full_name=target_user.full_name,
+        email=target_user.email,
+        account_status=target_user.account_status,
+        roles=[UserRoleSummary(id=r.id, name=r.name) for r in roles],
+        verticals=[UserVerticalSummary(id=v.id, name=v.name, is_primary=p) for v, p in verts],
+        last_login_at=target_user.last_login_at,
+        disabled_at=target_user.disabled_at,
+        created_at=target_user.created_at,
+        updated_at=target_user.updated_at,
+    )
+

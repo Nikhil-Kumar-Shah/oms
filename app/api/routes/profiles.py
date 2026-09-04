@@ -42,7 +42,15 @@ def get_user_profile(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Retrieves specified user's operational profile."""
+    """Retrieves specified user's operational profile within authorized vertical scope."""
+    from app.services.authority_service import AuthorityService
+    from app.core.exceptions import ForbiddenException
+
+    auth_service = AuthorityService(db)
+    if not auth_service.is_executive_or_admin(current_user.id):
+        if not auth_service.can_access_object(current_user, "user", user_id):
+            raise ForbiddenException("You do not have access to view this user profile")
+
     try:
         profile = ProfileService.get_or_create_profile(db, user_id)
         return ProfileService.format_profile_response(profile)

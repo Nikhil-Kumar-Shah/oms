@@ -20,7 +20,7 @@ from app.schemas.organization import (
     VerticalListResponse,
     VerticalResponse,
 )
-from app.schemas.user import UserListResponse
+from app.schemas.user import UserListResponse, UserResponse
 from app.services.organization_service import OrganizationService
 
 router = APIRouter(prefix="/organization", tags=["Organization"])
@@ -125,7 +125,7 @@ def search_organization_users(
 
     if not authority_service.is_executive_or_admin(current_user.id):
         user_roles = authority_service.get_user_role_names(current_user.id)
-        if "EVENT_TEAM" in user_roles:
+        if "EVENT_TEAM" in user_roles and not authority_service.is_internal_operational(current_user.id):
             event_ids = authority_service.get_user_event_ids(current_user.id)
             from app.models.event import EventMember, EventTeamProfile
             member_uids = db.scalars(
@@ -134,20 +134,24 @@ def search_organization_users(
             team_uids = db.scalars(
                 select(EventTeamProfile.user_id).where(EventTeamProfile.event_id.in_(event_ids))
             ).all() if event_ids else []
-            allowed_user_ids = set(member_uids) | set(team_uids) | {current_user.id}
+            allowed_user_ids = (set(member_uids) | set(team_uids) | {current_user.id}) if event_ids else {current_user.id}
         else:
             # Internal roles (SUPER_COORDINATOR, COORDINATOR, VOLUNTEER):
-            # When no vertical_id is explicitly requested, scoped_vertical_ids stays None
-            # so list_users returns all active users across the entire platform.
+            # Must strictly be restricted to actor's authorized vertical scope.
             assigned_vids = authority_service.get_user_vertical_ids(current_user.id)
+            if not assigned_vids:
+                # Scoped user with no vertical assignment must return 0 results, never fall back to global
+                return UserListResponse(total=0, items=[])
+
             if scoped_vertical_id:
                 if scoped_vertical_id not in assigned_vids:
-                    scoped_vertical_ids = []
-                    scoped_vertical_id = None
-                else:
-                    scoped_vertical_ids = [scoped_vertical_id]
-                    scoped_vertical_id = None
-            # else: no vertical filter -> leave scoped_vertical_ids as None (all platform users)
+                    # User requested vertical outside their authorized scope
+                    return UserListResponse(total=0, items=[])
+                scoped_vertical_ids = [scoped_vertical_id]
+                scoped_vertical_id = None
+            else:
+                # No vertical filter supplied -> restrict to all authorized verticals for this actor
+                scoped_vertical_ids = assigned_vids
 
     users = user_service.list_users(
         status_filter=effective_status,
@@ -170,8 +174,8 @@ def search_organization_users(
 
     items = []
     for u in users:
-        roles = rbac_service.get_user_roles(u.id)
-        verts = org_service.get_user_verticals(u.id)
+        roles = [ur.role for ur in u.user_roles if ur.role] if hasattr(u, "user_roles") and u.user_roles else rbac_service.get_user_roles(u.id)
+        verts = [(uv.vertical, uv.is_primary) for uv in u.user_verticals if uv.vertical] if hasattr(u, "user_verticals") and u.user_verticals else org_service.get_user_verticals(u.id)
         items.append(
             UserResponse(
                 id=u.id,
@@ -189,6 +193,55 @@ def search_organization_users(
         )
 
     return UserListResponse(total=total, items=items)
+
+
+@router.get(
+    "/users/{user_id}",
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get Organization User Detail",
+    description="Retrieves full user detail by UUID within authorized vertical scope.",
+)
+def get_organization_user_detail(
+    user_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserResponse:
+    from app.core.exceptions import ForbiddenException, EntityNotFoundException
+    from app.services.authority_service import AuthorityService
+    from app.services.user_service import UserService
+    from app.services.rbac_service import RbacService
+    from app.schemas.user import UserResponse, UserRoleSummary, UserVerticalSummary
+
+    authority_service = AuthorityService(db)
+    user_service = UserService(db)
+
+    target_user = user_service.get_user_by_id(user_id)
+    if not target_user:
+        raise EntityNotFoundException("User", str(user_id))
+
+    if not authority_service.is_executive_or_admin(current_user.id):
+        if not authority_service.can_access_object(current_user, "user", target_user):
+            raise ForbiddenException("You do not have access to view this user profile")
+
+    rbac_service = RbacService(db)
+    org_service = OrganizationService(db)
+    roles = [ur.role for ur in target_user.user_roles if ur.role] if hasattr(target_user, "user_roles") and target_user.user_roles else rbac_service.get_user_roles(target_user.id)
+    verts = [(uv.vertical, uv.is_primary) for uv in target_user.user_verticals if uv.vertical] if hasattr(target_user, "user_verticals") and target_user.user_verticals else org_service.get_user_verticals(target_user.id)
+
+    return UserResponse(
+        id=target_user.id,
+        username=target_user.username,
+        full_name=target_user.full_name,
+        email=target_user.email,
+        account_status=target_user.account_status,
+        roles=[UserRoleSummary(id=r.id, name=r.name) for r in roles],
+        verticals=[UserVerticalSummary(id=v.id, name=v.name, is_primary=p) for v, p in verts],
+        last_login_at=target_user.last_login_at,
+        disabled_at=target_user.disabled_at,
+        created_at=target_user.created_at,
+        updated_at=target_user.updated_at,
+    )
 
 
 @router.get(
