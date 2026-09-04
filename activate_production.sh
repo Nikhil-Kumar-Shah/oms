@@ -268,8 +268,8 @@ echo -e "  ${GREEN}[✓]${RESET} Python backend packages installed."
 echo -e "\n${BOLD}[6/10] Compiling Next.js Production Frontend Bundle...${RESET}"
 cd "${TARGET_DIR}/frontend"
 
-sudo -u "$APP_USER" npm install --prefer-offline
-sudo -u "$APP_USER" npm run build
+sudo -u "$APP_USER" npm install --prefer-offline --no-audit --no-fund
+sudo -u "$APP_USER" NEXT_TELEMETRY_DISABLED=1 npm run build
 echo -e "  ${GREEN}[✓]${RESET} Next.js production build completed."
 cd "$TARGET_DIR"
 
