@@ -171,8 +171,8 @@ class UserService:
         stmt = (
             select(User)
             .options(
-                selectinload(User.user_roles),
-                selectinload(User.user_verticals),
+                selectinload(User.user_roles).selectinload(UserRole.role),
+                selectinload(User.user_verticals).selectinload(UserVertical.vertical),
             )
             .order_by(User.created_at.desc())
         )

@@ -208,7 +208,10 @@ class WorkspaceService:
             select(Task)
             .options(*task_load_options)
             .where(
-                Task.assigned_to_id == current_user.id,
+                or_(
+                    Task.assigned_to_id == current_user.id,
+                    and_(Task.assigned_to_id.is_(None), Task.assigned_by_id == current_user.id),
+                ),
                 Task.status.notin_([TaskStatus.COMPLETED, TaskStatus.CANCELLED]),
             )
             .order_by(Task.deadline.asc().nullslast(), Task.priority.desc())
@@ -233,7 +236,10 @@ class WorkspaceService:
             select(Task)
             .options(*task_load_options)
             .where(
-                Task.assigned_to_id == current_user.id,
+                or_(
+                    Task.assigned_to_id == current_user.id,
+                    and_(Task.assigned_to_id.is_(None), Task.assigned_by_id == current_user.id),
+                ),
                 Task.status == TaskStatus.COMPLETED,
             )
             .order_by(Task.completed_on.desc().nullslast(), Task.updated_at.desc())

@@ -412,10 +412,111 @@ echo -e "  ${GREEN}[✓]${RESET} Systemd services (backend + frontend) started a
 # ------------------------------------------------------------------------------
 echo -e "\n${BOLD}[9/10] Configuring Nginx Reverse Proxy & Firewall...${RESET}"
 
-# Generate standalone Nginx config compatible with HTTP (and ready for HTTPS via Certbot)
+# Ensure certbot challenge directory exists
+mkdir -p /var/www/certbot
+chown -R www-data:www-data /var/www/certbot 2>/dev/null || true
+
+# Check if SSL certificate exists for the target domain or default domain
+CERT_FILE=""
+KEY_FILE=""
+
+for candidate_domain in "$DOMAIN" "oms.nikhilkshah.me" "oms.paradoxsports.org"; do
+  if [ -f "/etc/letsencrypt/live/${candidate_domain}/fullchain.pem" ] && [ -f "/etc/letsencrypt/live/${candidate_domain}/privkey.pem" ]; then
+    CERT_FILE="/etc/letsencrypt/live/${candidate_domain}/fullchain.pem"
+    KEY_FILE="/etc/letsencrypt/live/${candidate_domain}/privkey.pem"
+    echo -e "  ${GREEN}[✓]${RESET} Found valid SSL certificate for domain: ${candidate_domain}"
+    break
+  fi
+done
+
 NGINX_CONF="/etc/nginx/sites-available/paradox-oms.conf"
-cat > "$NGINX_CONF" <<EOF
-# Paradox Sports OMS — Nginx Production Reverse Proxy
+
+if [ -n "$CERT_FILE" ] && [ -n "$KEY_FILE" ]; then
+  echo -e "  [*] Generating Dual HTTP/HTTPS Nginx configuration with SSL termination..."
+  cat > "$NGINX_CONF" <<EOF
+# Paradox Sports OMS — Nginx Production Reverse Proxy (SSL Enabled)
+upstream paradox_backend {
+    server 127.0.0.1:8000 max_fails=3 fail_timeout=10s;
+    keepalive 32;
+}
+
+upstream paradox_frontend {
+    server 127.0.0.1:3000 max_fails=3 fail_timeout=10s;
+    keepalive 32;
+}
+
+# HTTP Server (Port 80): ACME challenge & Redirect to HTTPS
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN} oms.nikhilkshah.me ${PUBLIC_IP} localhost _;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        try_files \$uri =404;
+    }
+
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+}
+
+# HTTPS Server (Port 443): SSL Termination & Reverse Proxy
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name ${DOMAIN} oms.nikhilkshah.me ${PUBLIC_IP} localhost _;
+
+    ssl_certificate ${CERT_FILE};
+    ssl_certificate_key ${KEY_FILE};
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384';
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    client_max_body_size 25M;
+
+    location /api/ {
+        proxy_pass http://paradox_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 60s;
+    }
+
+    location /health {
+        proxy_pass http://paradox_backend/health;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+    }
+
+    location / {
+        proxy_pass http://paradox_frontend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+EOF
+else
+  echo -e "  [*] Generating Port 80 HTTP Nginx configuration (ACME challenge ready)..."
+  cat > "$NGINX_CONF" <<EOF
+# Paradox Sports OMS — Nginx Production Reverse Proxy (HTTP Bootstrap)
 upstream paradox_backend {
     server 127.0.0.1:8000 max_fails=3 fail_timeout=10s;
     keepalive 32;
@@ -429,7 +530,7 @@ upstream paradox_frontend {
 server {
     listen 80;
     listen [::]:80;
-    server_name ${DOMAIN} ${PUBLIC_IP} localhost _;
+    server_name ${DOMAIN} oms.nikhilkshah.me ${PUBLIC_IP} localhost _;
 
     client_max_body_size 25M;
 
@@ -471,6 +572,7 @@ server {
     }
 }
 EOF
+fi
 
 ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/paradox-oms.conf
 rm -f /etc/nginx/sites-enabled/default
@@ -479,6 +581,17 @@ rm -f /etc/nginx/sites-enabled/default
 nginx -t
 systemctl reload nginx
 echo -e "  ${GREEN}[✓]${RESET} Nginx reverse proxy configured and active."
+
+# If cert was not found and domain is set and certbot is available, attempt to obtain cert automatically
+if [ -z "$CERT_FILE" ] && command -v certbot &>/dev/null && [ "$DOMAIN" != "localhost" ] && [ "$DOMAIN" != "127.0.0.1" ] && [ "$DOMAIN" != "$PUBLIC_IP" ]; then
+  echo -e "  [*] Attempting automated Let's Encrypt SSL certificate issuance for ${DOMAIN}..."
+  if certbot --nginx -d "${DOMAIN}" --non-interactive --agree-tos --register-unsafely-without-email --redirect 2>/dev/null; then
+    echo -e "  ${GREEN}[✓]${RESET} Let's Encrypt SSL certificate obtained and activated for ${DOMAIN}!"
+  else
+    echo -e "  ${YELLOW}[!] Note: Could not auto-acquire SSL certificate. You can run manually:${RESET}"
+    echo -e "      ${BOLD}sudo certbot --nginx -d ${DOMAIN}${RESET}"
+  fi
+fi
 
 # Configure UFW Firewall
 if command -v ufw &> /dev/null; then

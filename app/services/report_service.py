@@ -84,6 +84,8 @@ class ReportService:
             return ["DEPUTY_CORE"], None
         elif level == 4 or "DEPUTY_CORE" in role_names:
             return ["SPORTS_CORE", "CORE"], None
+        elif "ADMIN" in role_names:
+            return ["ADMIN", "SPORTS_CORE", "DEPUTY_CORE"], None
         else:
             # Default fallback for standard operational roles
             return ["COORDINATOR"], vertical_id
@@ -215,11 +217,17 @@ class ReportService:
                 raise ForbiddenException("You cannot submit a report for a vertical you do not belong to")
         else:
             if not user_vids and not self.auth.is_executive_or_admin(user_id):
-                raise ValidationException("User is not assigned to any active vertical division")
-            resolved_vertical_id = user_vids[0] if user_vids else None
-            if not resolved_vertical_id:
+                # Attempt to auto-heal by assigning fallback active vertical
                 active_v = self.db.scalar(select(Vertical).where(Vertical.status == VerticalStatus.ACTIVE).limit(1))
-                resolved_vertical_id = active_v.id if active_v else None
+                if active_v:
+                    resolved_vertical_id = active_v.id
+                else:
+                    raise ValidationException("User is not assigned to any active vertical division")
+            else:
+                resolved_vertical_id = user_vids[0] if user_vids else None
+                if not resolved_vertical_id:
+                    active_v = self.db.scalar(select(Vertical).where(Vertical.status == VerticalStatus.ACTIVE).limit(1))
+                    resolved_vertical_id = active_v.id if active_v else None
 
         if not resolved_vertical_id:
             raise ValidationException("Unable to derive active vertical division for report")
@@ -242,6 +250,20 @@ class ReportService:
                 raise ValidationException(
                     f"A report for date {resolved_date.isoformat()} was returned. Please edit and resubmit that report."
                 )
+            elif existing.status == DailyReportStatus.DRAFT:
+                # Update and submit the existing draft seamlessly
+                update_data = DailyReportUpdate(
+                    work_summary=data.work_summary,
+                    tasks=data.tasks,
+                    task_ids=data.task_ids,
+                    tasks_completed=data.tasks_completed,
+                    blockers=data.blockers,
+                    issues=data.issues,
+                    next_actions=data.next_actions,
+                    evidence_links=data.evidence_links,
+                    submit_now=data.submit_now,
+                )
+                return self.resubmit_daily_report(existing.id, data=update_data, actor_id=user_id)
 
         # 4. Resolve Reviewer via Hierarchy
         eligible_reviewers = self.resolve_eligible_reviewers(user_id, resolved_vertical_id)

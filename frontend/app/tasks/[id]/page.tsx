@@ -20,6 +20,7 @@ import { HealthIndicator } from '@/components/common/HealthIndicator';
 import { TaskTypeBadge } from '@/components/common/TaskTypeBadge';
 import { ActiveBadge } from '@/components/common/ActiveBadge';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { ErrorView } from '@/components/ui/ErrorView';
 import { UserSelector } from '@/components/selectors';
 import { useAuth } from '@/hooks/useAuth';
 import { tasksApi, organizationApi, ApiException } from '@/lib/api';
@@ -308,9 +309,16 @@ function TaskDetailContent() {
             <Spinner size="lg" />
           </div>
         ) : !task ? (
-          <Alert variant="danger" title="Not Found">
-            Task not found or access is forbidden by vertical scope.
-          </Alert>
+          <ErrorView
+            type="404"
+            title="Task Not Found"
+            message="The requested task could not be found or access is restricted by your vertical scope."
+            showHomeButton={true}
+            returnHref={backHref}
+            returnLabel={backLabel}
+            onRetry={() => setRefreshTrigger((prev) => prev + 1)}
+            layout="inline"
+          />
         ) : (
           <div className="space-y-6">
             {/* Header Card */}

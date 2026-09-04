@@ -332,6 +332,7 @@ class TaskService:
         skip: int = 0,
         limit: int = 50,
         actor: Optional[User] = None,
+        scope: Optional[str] = None,
     ) -> Tuple[List[Task], int]:
         """Lists tasks with filters, search, pagination, and caller visibility scoping."""
         stmt = select(Task).options(
@@ -357,12 +358,23 @@ class TaskService:
                     # Coordinators / Super Coordinators can see all tasks in their vertical divisions
                     stmt = stmt.where(Task.vertical_id.in_(actor_vids))
 
+        if scope == "my_tasks" and actor:
+            stmt = stmt.where(
+                or_(
+                    Task.assigned_to_id == actor.id,
+                    and_(Task.assigned_to_id.is_(None), Task.assigned_by_id == actor.id),
+                )
+            )
+        elif scope == "created_by_me" and actor:
+            stmt = stmt.where(Task.assigned_by_id == actor.id)
+        else:
+            if assigned_to_id:
+                stmt = stmt.where(Task.assigned_to_id == assigned_to_id)
+            if created_by_id:
+                stmt = stmt.where(Task.assigned_by_id == created_by_id)
+
         if vertical_id:
             stmt = stmt.where(Task.vertical_id == vertical_id)
-        if assigned_to_id:
-            stmt = stmt.where(Task.assigned_to_id == assigned_to_id)
-        if created_by_id:
-            stmt = stmt.where(Task.assigned_by_id == created_by_id)
         if status:
             stmt = stmt.where(Task.status == status)
         if priority:
@@ -398,12 +410,17 @@ class TaskService:
         limit: int = 50,
     ) -> Tuple[List[Task], int]:
         """
-        Retrieves tasks assigned strictly to the authenticated user.
+        Retrieves tasks assigned strictly to the authenticated user, or unassigned tasks created by the user.
         Never allows client to query other users' work view.
         """
         stmt = (
             select(Task)
-            .where(Task.assigned_to_id == user_id)
+            .where(
+                or_(
+                    Task.assigned_to_id == user_id,
+                    and_(Task.assigned_to_id.is_(None), Task.assigned_by_id == user_id),
+                )
+            )
             .options(
                 selectinload(Task.vertical),
                 selectinload(Task.assigned_to),

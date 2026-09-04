@@ -3,8 +3,9 @@ RBAC & Permission Resolution Service
 Server-authoritative role assignment, permission querying, and effective permission calculation.
 """
 
+import time
 import uuid
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
 from app.core.exceptions import EntityNotFoundException, ValidationException
@@ -12,6 +13,18 @@ from app.core.logging import get_logger
 from app.models.rbac import Permission, Role, RolePermission, UserPermissionOverride, UserRole
 
 logger = get_logger(__name__)
+
+# In-memory effective permissions cache: user_id -> (effective_perms_set, expiry_mono)
+# Eliminates redundant DB queries for permission checks across concurrent API routes.
+_USER_PERMS_CACHE: Dict[uuid.UUID, Tuple[Set[str], float]] = {}
+
+
+def invalidate_perm_cache(user_id: Optional[uuid.UUID] = None) -> None:
+    """Invalidates effective permissions cache for a specific user or globally."""
+    if user_id:
+        _USER_PERMS_CACHE.pop(user_id, None)
+    else:
+        _USER_PERMS_CACHE.clear()
 
 CANONICAL_ROLES = [
     ("ADMIN", "System Administrator with full organizational access"),
@@ -307,6 +320,7 @@ class RbacService:
             self.db.add(mapping)
 
         self.db.flush()
+        invalidate_perm_cache(user_id)
         logger.info(f"Assigned roles {[r.name for r in roles]} to user {user_id}")
         return roles
 
@@ -315,14 +329,21 @@ class RbacService:
         Server-authoritative effective permission calculation:
         Effective = (Role Permissions + Explicit Grants) - Explicit Revokes
         ADMIN role automatically possesses ALL system permissions.
+        Uses in-memory caching to eliminate redundant database queries on concurrent requests.
         """
+        now_mono = time.monotonic()
+        cached = _USER_PERMS_CACHE.get(user_id)
+        if cached and now_mono < cached[1]:
+            return cached[0]
+
         user_roles = self.get_user_roles(user_id)
         role_names = {r.name for r in user_roles}
 
-        # If user has ADMIN role, return all available permission codes
+        # If user has ADMIN role, return all available permission codes immediately
         if "ADMIN" in role_names:
-            all_perms = self.list_permissions()
-            return {p.code for p in all_perms}
+            admin_perms = set(DEFAULT_ROLE_PERMISSIONS.get("ADMIN", [code for code, _, _ in CORE_PERMISSIONS]))
+            _USER_PERMS_CACHE[user_id] = (admin_perms, now_mono + 60.0)
+            return admin_perms
 
         # 1. Collect permissions from all assigned roles
         role_ids = [r.id for r in user_roles]
@@ -349,6 +370,7 @@ class RbacService:
 
         # 3. Compute final effective set
         effective = (role_perm_codes | explicit_grants) - explicit_revokes
+        _USER_PERMS_CACHE[user_id] = (effective, now_mono + 60.0)
         return effective
 
     def has_permission(self, user_id: uuid.UUID, permission_code: str) -> bool:
@@ -382,4 +404,5 @@ class RbacService:
             self.db.add(override)
 
         self.db.flush()
+        invalidate_perm_cache(user_id)
         logger.info(f"Updated permission overrides for user {user_id}")

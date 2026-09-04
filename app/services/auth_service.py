@@ -3,11 +3,12 @@ Authentication & Session Management Service
 Server-authoritative login, session lifecycle, and credential operations.
 """
 
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 from app.core.config import get_settings
 from app.core.exceptions import (
     AccountInactiveException,
@@ -23,6 +24,7 @@ from app.core.security import (
     validate_password_strength,
     verify_password,
 )
+from app.models.rbac import UserRole
 from app.models.session import UserSession
 from app.models.user import AccountStatus, User
 from app.services.audit_service import AuditService
@@ -31,6 +33,18 @@ from app.services.user_service import UserService
 
 logger = get_logger(__name__)
 settings = get_settings()
+
+# In-memory session validation cache: token_hash -> (user, session, expiry_mono)
+# Drastically reduces DB query latency for rapid/concurrent API calls (e.g., polling, dashboard mounts).
+_SESSION_CACHE: Dict[str, Tuple[User, UserSession, float]] = {}
+
+
+def invalidate_session_cache(token_hash: Optional[str] = None) -> None:
+    """Invalidates the in-memory session cache."""
+    if token_hash:
+        _SESSION_CACHE.pop(token_hash, None)
+    else:
+        _SESSION_CACHE.clear()
 
 
 class AuthService:
@@ -150,6 +164,7 @@ class AuthService:
             return
 
         token_hash = hash_session_token(raw_token)
+        invalidate_session_cache(token_hash)
         stmt = select(UserSession).where(UserSession.session_token_hash == token_hash)
         session = self.db.scalar(stmt)
 
@@ -169,47 +184,80 @@ class AuthService:
 
     def validate_session(self, raw_token: str) -> Tuple[User, UserSession]:
         """
-        Validates session token against PostgreSQL:
-        - Token hash matches
-        - Session is unrevoked
-        - Session has not expired
-        - Associated user account is ACTIVE
-        Updates last_seen_at.
+        Validates session token:
+        - Checks in-memory cache first (45s TTL) for fast sub-millisecond response.
+        - Validates against PostgreSQL using eager joined loading.
+        - Verifies session validity, unexpired status, and ACTIVE account.
+        - Throttles last_seen_at write to at most once per 5 minutes.
         """
         if not raw_token:
             raise AuthenticationFailedException("Authentication required")
 
         token_hash = hash_session_token(raw_token)
-        stmt = select(UserSession).where(UserSession.session_token_hash == token_hash)
+        now_mono = time.monotonic()
+
+        # 1. Check in-memory validation cache
+        cached = _SESSION_CACHE.get(token_hash)
+        if cached:
+            c_user, c_session, expiry_mono = cached
+            if now_mono < expiry_mono:
+                if c_session.is_valid and c_user.account_status == AccountStatus.ACTIVE:
+                    user_in_db = self.db.merge(c_user, load=False) if c_user not in self.db else c_user
+                    session_in_db = self.db.merge(c_session, load=False) if c_session not in self.db else c_session
+                    return user_in_db, session_in_db
+                else:
+                    _SESSION_CACHE.pop(token_hash, None)
+
+        # 2. Database query with eager joined loading of user and user_roles
+        stmt = (
+            select(UserSession)
+            .options(
+                joinedload(UserSession.user).options(
+                    selectinload(User.user_roles).selectinload(UserRole.role)
+                )
+            )
+            .where(UserSession.session_token_hash == token_hash)
+        )
         session = self.db.scalar(stmt)
 
         if not session:
+            _SESSION_CACHE.pop(token_hash, None)
             raise AuthenticationFailedException("Invalid or unrecognized session token")
 
         if not session.is_valid:
+            _SESSION_CACHE.pop(token_hash, None)
             raise SessionExpiredException("Session has expired or was revoked")
 
-        user = self.users.get_user_by_id(session.user_id)
+        user = session.user
+        if not user:
+            user = self.users.get_user_by_id(session.user_id)
 
         if user.account_status != AccountStatus.ACTIVE:
+            _SESSION_CACHE.pop(token_hash, None)
             session.revoke()
             self.db.flush()
             raise AccountInactiveException(user.account_status.value)
 
         # Enforce Event Team full activation requirements (session invalidated if deactivated)
-        user_roles = {r.name for r in self.rbac.get_user_roles(user.id)}
+        user_roles = {ur.role.name for ur in user.user_roles if ur.role}
         if "EVENT_TEAM" in user_roles and "ADMIN" not in user_roles and "SPORTS_CORE" not in user_roles:
             from app.services.event_team_service import EventTeamService
             evt_service = EventTeamService(self.db)
             is_active, reason = evt_service.is_event_team_fully_activated(user.id)
             if not is_active:
+                _SESSION_CACHE.pop(token_hash, None)
                 session.revoke()
                 self.db.flush()
                 raise AccountInactiveException(f"PENDING_ACTIVATION: {reason}")
 
-        # Touch last_seen_at
-        session.touch()
-        self.db.flush()
+        # Touch last_seen_at only if >= 5 minutes elapsed (avoids write query on every GET)
+        now = datetime.now(timezone.utc)
+        if session.last_seen_at is None or (now - session.last_seen_at).total_seconds() > 300:
+            session.touch()
+            self.db.flush()
+
+        # Cache session in memory for 45 seconds
+        _SESSION_CACHE[token_hash] = (user, session, now_mono + 45.0)
 
         return user, session
 

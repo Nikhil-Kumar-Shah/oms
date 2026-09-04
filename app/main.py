@@ -88,8 +88,10 @@ async def lifespan(app: FastAPI):
         from app.core.database import SessionLocal, sync_database_enums
         sync_database_enums()
         from app.services.rbac_service import ensure_canonical_roles_and_permissions
+        from app.services.config_service import ensure_canonical_system_configs
         with SessionLocal() as db_session:
             ensure_canonical_roles_and_permissions(db_session)
+            ensure_canonical_system_configs(db_session)
             db_session.commit()
     except Exception as exc:
         logger.critical(f"FATAL: PostgreSQL database is unreachable on startup: {exc}")

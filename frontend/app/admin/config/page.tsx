@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Spinner } from '@/components/ui/Spinner';
 import { Alert } from '@/components/ui/Alert';
+import { ErrorView } from '@/components/ui/ErrorView';
 import { configApi, ApiException } from '@/lib/api';
 import { SystemConfigResponse, ConfigValueType } from '@/types/governance';
 import {
@@ -335,6 +336,16 @@ export default function AdminConfigPage() {
           <div className="p-16 flex flex-col items-center justify-center gap-2 text-zinc-400">
             <Spinner size="lg" />
             <p className="text-xs">Loading system configuration...</p>
+          </div>
+        ) : errorMsg && configs.length === 0 ? (
+          <div className="p-8">
+            <ErrorView
+              type="backend_unavailable"
+              title="Unable to Load System Configuration"
+              message={errorMsg}
+              onRetry={fetchConfigs}
+              layout="inline"
+            />
           </div>
         ) : (
           <div className="space-y-6">

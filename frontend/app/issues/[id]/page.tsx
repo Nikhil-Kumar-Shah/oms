@@ -16,6 +16,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { Alert } from '@/components/ui/Alert';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { ErrorView } from '@/components/ui/ErrorView';
 import { useAuth } from '@/hooks/useAuth';
 import { issuesApi, ApiException } from '@/lib/api';
 import {
@@ -177,9 +178,15 @@ export default function IssueDetailPage() {
             <Spinner size="lg" />
           </div>
         ) : !issue ? (
-          <Alert variant="danger" title="Not Found">
-            Issue not found or unauthorized.
-          </Alert>
+          <ErrorView
+            type="404"
+            title="Issue Record Not Found"
+            message="The requested issue record could not be found or access is restricted by confidentiality."
+            showHomeButton={true}
+            returnHref="/issues"
+            returnLabel="Back to Issue Register"
+            layout="inline"
+          />
         ) : (
           <div className="space-y-6">
             {/* Header Card */}

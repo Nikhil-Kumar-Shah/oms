@@ -488,6 +488,7 @@ export default function ReportsPage() {
         setSuccessMsg('Daily report corrected and resubmitted successfully!');
       } else {
         const payload: DailyReportCreate = {
+          vertical_id: primaryVertical?.id || user?.verticals?.[0]?.id || undefined,
           work_summary: workSummary.trim(),
           tasks: taskItems,
           blockers: blockers.trim() || null,
@@ -505,7 +506,12 @@ export default function ReportsPage() {
         loadTargetWeeklyReport();
       }
     } catch (err: any) {
-      setSubmitError(err.message || 'Failed to submit report. Please verify input.');
+      const msg =
+        err?.response?.data?.detail?.message ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to submit report. Please verify input.';
+      setSubmitError(typeof msg === 'string' ? msg : JSON.stringify(msg));
     } finally {
       setSubmitLoading(false);
     }

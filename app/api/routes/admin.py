@@ -108,8 +108,8 @@ def list_users(
 
     items = []
     for u in users:
-        roles = rbac_service.get_user_roles(u.id)
-        verts = org_service.get_user_verticals(u.id)
+        roles = [ur.role for ur in u.user_roles if ur.role] if hasattr(u, "user_roles") and u.user_roles else rbac_service.get_user_roles(u.id)
+        verts = [(uv.vertical, uv.is_primary) for uv in u.user_verticals if uv.vertical] if hasattr(u, "user_verticals") and u.user_verticals else org_service.get_user_verticals(u.id)
         items.append(
             UserResponse(
                 id=u.id,

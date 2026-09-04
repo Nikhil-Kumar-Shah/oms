@@ -100,7 +100,10 @@ class IssueService:
             resolved_assignee_ids.add(data.assigned_to_id)
 
         # Multi-assignee resolution using AudienceService
-        if data.assignee_all_users or data.assignee_vertical_ids or data.assignee_role_ids or data.assignee_user_ids:
+        is_vertical_or_group_assignment = bool(
+            data.assignee_all_users or data.assignee_vertical_ids or data.assignee_role_ids
+        )
+        if is_vertical_or_group_assignment or data.assignee_user_ids:
             aud_req = AudienceResolveRequest(
                 all_users=data.assignee_all_users or False,
                 vertical_ids=data.assignee_vertical_ids or [],
@@ -111,7 +114,34 @@ class IssueService:
             aud_res = audience_service.resolve_audience(aud_req, actor)
             resolved_assignee_ids.update(aud_res.user_ids)
 
-        primary_assignee_id = next(iter(resolved_assignee_ids)) if resolved_assignee_ids else None
+        # Determine primary assignee with intelligent leadership prioritization
+        primary_assignee_id = None
+        if data.assigned_to_id and data.assigned_to_id in resolved_assignee_ids:
+            primary_assignee_id = data.assigned_to_id
+        elif resolved_assignee_ids:
+            # Exclude the creator from being auto-chosen if other members exist in the vertical
+            non_actor_candidates = [uid for uid in resolved_assignee_ids if uid != actor_id]
+            eligible_pool = non_actor_candidates if non_actor_candidates else list(resolved_assignee_ids)
+
+            # Prioritize coordinators and vertical leadership among eligible members
+            from app.models.rbac import Role, UserRole
+            lead_stmt = (
+                select(User.id)
+                .join(UserRole, User.id == UserRole.user_id)
+                .join(Role, UserRole.role_id == Role.id)
+                .where(
+                    User.id.in_(eligible_pool),
+                    Role.name.in_(["SUPER_COORDINATOR", "COORDINATOR", "DEPUTY_CORE", "SPORTS_CORE", "CORE"]),
+                )
+            )
+            lead_uids = set(self.db.scalars(lead_stmt).all())
+            prioritized = [uid for uid in eligible_pool if uid in lead_uids]
+
+            if is_vertical_or_group_assignment and not data.assignee_user_ids:
+                # If assigned to a vertical division as a team, prefer vertical coordinator
+                primary_assignee_id = prioritized[0] if prioritized else (eligible_pool[0] if len(eligible_pool) == 1 and eligible_pool[0] != actor_id else None)
+            else:
+                primary_assignee_id = prioritized[0] if prioritized else eligible_pool[0]
 
         # 3. Create Issue Model
         issue = Issue(

@@ -18,6 +18,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { Alert } from '@/components/ui/Alert';
 import { PasswordRequirements } from '@/components/ui/PasswordRequirements';
 import { EmptyState } from '@/components/common/EmptyState';
+import { ErrorView } from '@/components/ui/ErrorView';
 import { VerticalSelector } from '@/components/selectors';
 import { adminApi, organizationApi, eventsApi, eventTeamsApi, ApiException } from '@/lib/api';
 import { UserResponse, CanonicalRole, AccountStatus, UserCreateInput, RoleDetail } from '@/types/user';
@@ -130,8 +131,8 @@ export default function AdminUsersPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Fetch preloaded data
-  useEffect(() => {
+  // Fetch preloaded data (verticals & roles)
+  const loadPreloadedData = useCallback(() => {
     organizationApi
       .listVerticals()
       .then((res) => setVerticals(res.items || []))
@@ -143,11 +144,16 @@ export default function AdminUsersPage() {
       .catch((err) => console.warn('Failed to load roles:', err));
   }, []);
 
+  useEffect(() => {
+    loadPreloadedData();
+  }, [loadPreloadedData]);
+
   // Authoritative User Listing
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     setErrorMsg(null);
     try {
+      loadPreloadedData();
       const res = await adminApi.listUsers({
         search: debouncedSearch.trim() || undefined,
         status_filter: statusFilter !== 'ALL' ? (statusFilter as AccountStatus) : undefined,
@@ -159,14 +165,14 @@ export default function AdminUsersPage() {
       setTotalCount(res.total || 0);
     } catch (err) {
       if (err instanceof ApiException) {
-        setErrorMsg(`Failed to fetch user accounts: ${err.message} (${err.code})`);
+        setErrorMsg(err.message);
       } else if (err instanceof Error) {
         setErrorMsg(err.message);
       }
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, statusFilter, roleFilter]);
+  }, [debouncedSearch, statusFilter, roleFilter, loadPreloadedData]);
 
   useEffect(() => {
     let active = true;
@@ -567,6 +573,16 @@ export default function AdminUsersPage() {
               <div className="p-12 flex flex-col items-center justify-center gap-2 text-zinc-400">
                 <Spinner size="md" />
                 <p className="text-xs">Loading user registry...</p>
+              </div>
+            ) : errorMsg && users.length === 0 ? (
+              <div className="p-8">
+                <ErrorView
+                  type="backend_unavailable"
+                  title="Unable to Load User Accounts"
+                  message={errorMsg}
+                  onRetry={fetchUsers}
+                  layout="inline"
+                />
               </div>
             ) : users.length === 0 ? (
               <EmptyState

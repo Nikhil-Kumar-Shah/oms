@@ -379,15 +379,22 @@ export default function IssuesPage() {
                           {issue.raised_by_username}
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap text-xs">
-                          {issue.assignees && issue.assignees.length > 0 ? (
-                            <span className="font-medium text-zinc-800 dark:text-zinc-200 flex items-center gap-1">
-                              <Users className="w-3 h-3 text-indigo-500" />
-                              {issue.assignees.length === 1
-                                ? (issue.assignees[0].full_name || issue.assignees[0].username)
-                                : `${issue.assignees[0].full_name || issue.assignees[0].username} (+${issue.assignees.length - 1})`}
+                          {issue.assignees && issue.assignees.length > 1 ? (
+                            <span
+                              className="font-medium text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5 cursor-help"
+                              title={issue.assignees.map((a) => a.full_name || a.username).join(', ')}
+                            >
+                              <Users className="w-3.5 h-3.5 text-indigo-500" />
+                              {issue.vertical_name ? `${issue.vertical_name} Team` : 'Assigned Team'} ({issue.assignees.length})
+                            </span>
+                          ) : issue.assignees && issue.assignees.length === 1 ? (
+                            <span className="font-medium text-zinc-800 dark:text-zinc-200">
+                              {issue.assignees[0].full_name || issue.assignees[0].username}
                             </span>
                           ) : issue.assigned_to_username ? (
-                            <span>{issue.assigned_to_username}</span>
+                            <span className="font-medium text-zinc-800 dark:text-zinc-200">{issue.assigned_to_username}</span>
+                          ) : issue.vertical_name ? (
+                            <span className="text-zinc-500 italic">{issue.vertical_name} (Unassigned)</span>
                           ) : (
                             <span className="text-zinc-400 italic">Unassigned</span>
                           )}

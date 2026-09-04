@@ -318,29 +318,50 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
           let detailMsg = '';
           if (Array.isArray(data.detail)) {
             detailMsg = `Validation error: ${data.detail
-              .map((d: any) => `${(d.loc || []).filter((x: any) => x !== 'body').join('.')}: ${d.msg}`)
+              .map((d: { loc?: (string | number)[]; msg?: string }) => `${(d.loc || []).filter((x: string | number) => x !== 'body').join('.')}: ${d.msg || 'invalid'}`)
               .join('; ')}`;
           } else if (typeof data.detail === 'string') {
             detailMsg = data.detail;
           } else {
             detailMsg = JSON.stringify(data.detail);
           }
+          let defaultCode = 'REQUEST_ERROR';
+          if (response.status === 401) defaultCode = 'UNAUTHORIZED';
+          else if (response.status === 403) defaultCode = 'FORBIDDEN';
+          else if (response.status === 404) defaultCode = 'NOT_FOUND';
+          else if (response.status === 408) defaultCode = 'TIMEOUT';
+          else if (response.status === 422) defaultCode = 'VALIDATION_ERROR';
+          else if (response.status === 502 || response.status === 503 || response.status === 504) defaultCode = 'BACKEND_UNAVAILABLE';
+          else if (response.status >= 500) defaultCode = 'SERVER_ERROR';
+
           apiError = {
-            code: response.status === 403 ? 'FORBIDDEN' : response.status === 404 ? 'NOT_FOUND' : response.status === 422 ? 'VALIDATION_ERROR' : 'REQUEST_ERROR',
+            code: defaultCode,
             message: detailMsg,
             details: typeof data.detail === 'object' ? data.detail : undefined,
           };
         } else {
+          let code = 'API_ERROR';
+          let message = data.message || `Request failed with status ${response.status}`;
+          if (response.status >= 500) {
+            code = response.status === 503 ? 'BACKEND_UNAVAILABLE' : 'SERVER_ERROR';
+            message = 'An unexpected server error occurred. Please try again later.';
+          }
           apiError = {
-            code: 'API_ERROR',
-            message: data.message || `Request failed with status ${response.status}`,
+            code,
+            message,
             details: data,
           };
         }
       } else {
+        let code = 'HTTP_ERROR';
+        let message = data || `HTTP ${response.status} ${response.statusText}`;
+        if (response.status >= 500) {
+          code = response.status === 503 ? 'BACKEND_UNAVAILABLE' : 'SERVER_ERROR';
+          message = 'An unexpected server error occurred. Please try again later.';
+        }
         apiError = {
-          code: 'HTTP_ERROR',
-          message: data || `HTTP ${response.status} ${response.statusText}`,
+          code,
+          message,
         };
       }
 
@@ -353,12 +374,33 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
       throw error;
     }
 
-    // Network error or backend offline
-    const networkError: ApiError = {
-      code: 'NETWORK_ERROR',
-      message: error instanceof Error ? error.message : 'Unable to connect to Paradox Sports OMS backend.',
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    const isTimeout =
+      error instanceof Error &&
+      (error.name === 'AbortError' || error.message.toLowerCase().includes('timeout'));
+
+    if (isOffline) {
+      const offlineError: ApiError = {
+        code: 'OFFLINE',
+        message: 'No internet connection detected. Please check your network connection.',
+      };
+      throw new ApiException(0, offlineError);
+    }
+
+    if (isTimeout) {
+      const timeoutError: ApiError = {
+        code: 'TIMEOUT',
+        message: 'Request timed out. Please check your connection and retry.',
+      };
+      throw new ApiException(408, timeoutError);
+    }
+
+    // Network error or backend offline while client is online
+    const backendError: ApiError = {
+      code: 'BACKEND_UNAVAILABLE',
+      message: 'Paradox Sports OMS backend is currently unreachable. Please try again later.',
     };
-    throw new ApiException(0, networkError);
+    throw new ApiException(503, backendError);
   }
 }
 

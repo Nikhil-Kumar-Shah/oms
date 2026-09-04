@@ -101,7 +101,12 @@ class SystemConfigService:
         stmt = select(SystemConfig).options(selectinload(SystemConfig.updated_by))
         if is_active is not None:
             stmt = stmt.where(SystemConfig.is_active == is_active)
-        return list(self.db.scalars(stmt.order_by(SystemConfig.key.asc())).all())
+        results = list(self.db.scalars(stmt.order_by(SystemConfig.key.asc())).all())
+        if not results:
+            ensure_canonical_system_configs(self.db)
+            self.db.commit()
+            results = list(self.db.scalars(stmt.order_by(SystemConfig.key.asc())).all())
+        return results
 
     def update_config(self, key: str, data: SystemConfigUpdate, actor_id: UUID) -> SystemConfig:
         config = self.get_config_by_key(key)
@@ -126,3 +131,117 @@ class SystemConfigService:
             details={"key": config.key, "old_value": old_val, "new_value": clean_val},
         )
         return config
+
+
+CANONICAL_SYSTEM_CONFIGS = [
+    {
+        "key": "system_name",
+        "value": "Paradox Sports OMS",
+        "value_type": ConfigValueType.STRING,
+        "description": "Authoritative application title displayed across system interfaces.",
+        "is_active": True,
+    },
+    {
+        "key": "maintenance_mode",
+        "value": "false",
+        "value_type": ConfigValueType.BOOLEAN,
+        "description": "Restricts operations to administrative users during scheduled maintenance.",
+        "is_active": True,
+    },
+    {
+        "key": "audit_retention_days",
+        "value": "90",
+        "value_type": ConfigValueType.INTEGER,
+        "description": "Minimum retention period in days for compliance and operational audit logs.",
+        "is_active": True,
+    },
+    {
+        "key": "session_timeout_mins",
+        "value": "60",
+        "value_type": ConfigValueType.INTEGER,
+        "description": "Inactivity duration in minutes before user authentication session expires.",
+        "is_active": True,
+    },
+    {
+        "key": "max_concurrent_logins",
+        "value": "3",
+        "value_type": ConfigValueType.INTEGER,
+        "description": "Maximum simultaneous active sessions permitted per operator identity.",
+        "is_active": True,
+    },
+    {
+        "key": "allow_self_registration",
+        "value": "false",
+        "value_type": ConfigValueType.BOOLEAN,
+        "description": "Governs whether unauthenticated users may submit self-service account requests.",
+        "is_active": True,
+    },
+    {
+        "key": "require_two_factor_auth",
+        "value": "false",
+        "value_type": ConfigValueType.BOOLEAN,
+        "description": "Enforces multi-factor verification for administrative and executive roles.",
+        "is_active": True,
+    },
+    {
+        "key": "default_task_sla_days",
+        "value": "3",
+        "value_type": ConfigValueType.INTEGER,
+        "description": "Standard operational turnaround duration in days assigned to newly created tasks.",
+        "is_active": True,
+    },
+    {
+        "key": "max_active_tasks_per_user",
+        "value": "10",
+        "value_type": ConfigValueType.INTEGER,
+        "description": "Maximum number of active or in-progress tasks allowed per individual operator.",
+        "is_active": True,
+    },
+    {
+        "key": "allow_public_forms",
+        "value": "true",
+        "value_type": ConfigValueType.BOOLEAN,
+        "description": "Enables public access to published organizational inquiry and intake forms.",
+        "is_active": True,
+    },
+]
+
+
+def ensure_canonical_system_configs(db: Session) -> int:
+    """
+    Guarantees all canonical system parameters exist in PostgreSQL database.
+    Idempotently seeds any missing configuration parameters with validated defaults.
+    """
+    seeded_count = 0
+    existing_configs = {c.key: c for c in db.scalars(select(SystemConfig)).all()}
+
+    for item in CANONICAL_SYSTEM_CONFIGS:
+        key = item["key"]
+        if key not in existing_configs:
+            new_config = SystemConfig(
+                key=key,
+                value=item["value"],
+                value_type=item["value_type"],
+                description=item["description"],
+                is_active=item["is_active"],
+                updated_at=datetime.now(timezone.utc),
+            )
+            db.add(new_config)
+            seeded_count += 1
+            logger.info(f"Seeded canonical system config '{key}' = '{item['value']}'")
+        else:
+            cfg = existing_configs[key]
+            changed = False
+            if not cfg.description and item.get("description"):
+                cfg.description = item["description"]
+                changed = True
+            if cfg.value_type != item["value_type"]:
+                cfg.value_type = item["value_type"]
+                changed = True
+            if changed:
+                logger.info(f"Updated metadata for system config '{key}'")
+
+    if seeded_count > 0:
+        db.flush()
+        logger.info(f"Successfully initialized {seeded_count} canonical system configurations.")
+    return seeded_count

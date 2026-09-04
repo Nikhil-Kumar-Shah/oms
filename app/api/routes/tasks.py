@@ -153,6 +153,7 @@ async def list_tasks(
         skip=skip,
         limit=limit,
         actor=current_user,
+        scope=scope,
     )
     return TaskListResponse(total=total, items=[_format_task_response(t) for t in items])
 

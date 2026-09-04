@@ -65,6 +65,7 @@ export default function TasksPage() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [audienceItems, setAudienceItems] = useState<AudienceItem[]>([]);
   const [audienceSelection, setAudienceSelection] = useState<UniversalAudienceSelection | null>(null);
+  const [assignToSelf, setAssignToSelf] = useState<boolean>(false);
   const [createForm, setCreateForm] = useState<{
     title: string;
     description: string;
@@ -139,6 +140,7 @@ export default function TasksPage() {
     setCreateError(null);
     setAudienceItems([]);
     setAudienceSelection(null);
+    setAssignToSelf(false);
     setCreateForm({
       title: '',
       description: '',
@@ -165,6 +167,11 @@ export default function TasksPage() {
     setCreateLoading(true);
     setCreateError(null);
 
+    const targetUserIds = audienceSelection?.user_ids ? [...audienceSelection.user_ids] : [];
+    if (assignToSelf && user?.id && !targetUserIds.includes(user.id)) {
+      targetUserIds.push(user.id);
+    }
+
     const payload: TaskCreate = {
       title: createForm.title.trim(),
       description: createForm.description.trim() || undefined,
@@ -172,10 +179,7 @@ export default function TasksPage() {
         audienceSelection?.vertical_ids && audienceSelection.vertical_ids.length > 0
           ? audienceSelection.vertical_ids
           : undefined,
-      user_ids:
-        audienceSelection?.user_ids && audienceSelection.user_ids.length > 0
-          ? audienceSelection.user_ids
-          : undefined,
+      user_ids: targetUserIds.length > 0 ? targetUserIds : undefined,
       role_ids:
         audienceSelection?.role_ids && audienceSelection.role_ids.length > 0
           ? audienceSelection.role_ids
@@ -598,6 +602,20 @@ export default function TasksPage() {
                       setCreateError(null);
                     }}
                   />
+
+                  {/* Optional Direct Assignment to Creator */}
+                  <div className="flex items-center gap-2.5 p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                    <input
+                      type="checkbox"
+                      id="assignToSelfCheckbox"
+                      checked={assignToSelf}
+                      onChange={(e) => setAssignToSelf(e.target.checked)}
+                      className="w-4 h-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                    />
+                    <label htmlFor="assignToSelfCheckbox" className="text-xs text-zinc-700 dark:text-zinc-300 cursor-pointer">
+                      <span className="font-semibold text-zinc-900 dark:text-zinc-100">Also assign directly to me:</span> Visible immediately in your personal My Tasks.
+                    </label>
+                  </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {/* Task Type (Optional) */}

@@ -52,8 +52,25 @@ def run_dev():
     ]
     backend_proc = subprocess.Popen(backend_cmd, cwd=root_dir)
 
+    # Wait for FastAPI Backend to be healthy before launching Next.js frontend
+    print("  [*] Waiting for FastAPI backend to complete startup (http://127.0.0.1:8000/health)...")
+    import urllib.request
+    backend_ready = False
+    for _ in range(20):
+        time.sleep(0.5)
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=1.0) as resp:
+                if resp.status == 200:
+                    backend_ready = True
+                    print("  [+] FastAPI backend is ready and responding.")
+                    break
+        except Exception:
+            pass
+    if not backend_ready:
+        print("  [!] Backend taking longer than expected to report healthy, proceeding with frontend launch.")
+
     # Launch Next.js Frontend
-    print("[*] 3. Launching Next.js Frontend on http://localhost:3000 ...")
+    print("\n[*] 3. Launching Next.js Frontend on http://localhost:3000 ...")
     npm_cmd = "npm.cmd" if os.name == "nt" else "npm"
     frontend_cmd = [npm_cmd, "run", "dev"]
     frontend_proc = subprocess.Popen(frontend_cmd, cwd=frontend_dir)
