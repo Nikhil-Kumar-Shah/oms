@@ -168,8 +168,7 @@ graph TD
     C -->|Clicks Submit| D(Report Status: SUBMITTED)
     D -->|Instant Feed Alert| E[Coordinator Review Inbox]
     
-    E --> F{Coordinator Reviews Report}
-    Note right of F: System prevents self-review
+    E --> F{"Coordinator Reviews Report<br/>(Self-Review Prohibited)"}
     
     F -- Incomplete / Needs Details --> G[Action: RETURNED / FLAGGED]
     G -->|Feedback Sent| H[Volunteer Edits and Resubmits]
@@ -263,10 +262,8 @@ Governs major tournaments, matches, training camps, and sports ceremonies.
 graph TD
     A[Core / Event Lead Creates Event] -->|Dates, Venue, Sport, Capacity| B(Event Status: DRAFT)
     B --> C[Configure Event Structure]
-    C --> D[Assign Point-of-Contacts - POCs]
-    Note right of D: Medical, Technical, Logistics, Security POCs
-    C --> E[Build Readiness Checklist]
-    Note right of E: Pitch, First Aid, Sound, Trophies
+    C --> D["Assign Point-of-Contacts (POCs)<br/>(Medical, Technical, Logistics, Security)"]
+    C --> E["Build Readiness Checklist<br/>(Pitch, First Aid, Sound, Trophies)"]
     
     D & E --> F[Publish Event Schedule]
     F -->|Status: PLANNED| G[Verticals Mobilize Teams]
@@ -390,8 +387,7 @@ graph TD
     F -->|Clicks 'I Acknowledge & Understand'| G[Acknowledgment Timestamped]
     
     G --> H[Live Compliance Tracker Updates]
-    H --> I{Leadership Monitors Compliance Dashboard}
-    Note right of I: Shows % of members who have acknowledged
+    H --> I{"Leadership Monitors Compliance Dashboard<br/>(Live % Acknowledged)"}
     
     I -- Outstanding Members --> J[Automated Reminder Sent]
 ```
