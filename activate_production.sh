@@ -256,6 +256,30 @@ if grep -q "^CORS_ORIGINS=" "${CONFIG_DIR}/production.env"; then
   sed -i -E "s#^CORS_ORIGINS=.*#CORS_ORIGINS=\"*\"#" "${CONFIG_DIR}/production.env"
 fi
 
+# Automatically percent-encode special characters in DATABASE_URL password (e.g. '@' -> '%40')
+python3 -c "
+import urllib.parse, re
+path = '${CONFIG_DIR}/production.env'
+try:
+    with open(path, 'r') as f:
+        c = f.read()
+    m = re.search(r'^(DATABASE_URL=[\"\']?)([^\"\'\r\n]+)([\"\']?)$', c, re.MULTILINE)
+    if m:
+        pre, url, post = m.group(1), m.group(2), m.group(3)
+        if '://' in url and '@' in url:
+            proto, rest = url.split('://', 1)
+            auth, host = rest.rsplit('@', 1)
+            if ':' in auth:
+                u, p = auth.split(':', 1)
+                enc_p = urllib.parse.quote_plus(urllib.parse.unquote(p))
+                new_line = f'{pre}{proto}://{u}:{enc_p}@{host}{post}'
+                c = re.sub(r'^DATABASE_URL=.*$', new_line, c, flags=re.MULTILINE)
+                with open(path, 'w') as f:
+                    f.write(c)
+except Exception:
+    pass
+" 2>/dev/null || true
+
 # Copy configuration files directly to avoid symlink cross-directory access restrictions
 rm -f "${TARGET_DIR}/.env" "${TARGET_DIR}/frontend/.env.local" "${TARGET_DIR}/frontend/.env.production.local"
 cp "${CONFIG_DIR}/production.env" "${TARGET_DIR}/.env"
@@ -332,13 +356,8 @@ echo -e "  [*] Verifying database connectivity..."
 DB_CONNECTED=false
 for i in {1..15}; do
   if sudo -u "$APP_USER" -E "${TARGET_DIR}/.venv/bin/python" -c "
-import os, psycopg2
-db_url = os.environ.get('DATABASE_URL', '')
-if '://' in db_url:
-    protocol, rest = db_url.split('://', 1)
-    clean_url = f'postgresql://{rest}'
-    conn = psycopg2.connect(clean_url)
-    conn.close()
+from app.core.database import verify_database_connection
+verify_database_connection(timeout_seconds=10.0)
 " 2>/dev/null; then
     DB_CONNECTED=true
     break
