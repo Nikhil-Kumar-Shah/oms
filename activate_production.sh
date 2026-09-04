@@ -136,6 +136,9 @@ chmod 755 "$TARGET_DIR"
 chmod 750 "$LOG_DIR"
 chmod 700 "$CONFIG_DIR"
 
+# Allow git operations in this repository across users
+git config --system --add safe.directory "$TARGET_DIR" 2>/dev/null || git config --global --add safe.directory "$TARGET_DIR" 2>/dev/null || true
+
 # Synchronize current repository to /opt/paradox-oms if running from outside
 if [ "$SCRIPT_SOURCE_DIR" != "$TARGET_DIR" ]; then
   echo -e "  [*] Synchronizing repository to ${TARGET_DIR}..."
