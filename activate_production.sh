@@ -141,11 +141,12 @@ if ! id -u "$APP_USER" &>/dev/null; then
   useradd -r -s /bin/bash -d "$TARGET_DIR" "$APP_USER"
 fi
 
-mkdir -p "$TARGET_DIR" "$CONFIG_DIR" "$LOG_DIR" /var/www/certbot
+mkdir -p "$TARGET_DIR" "$CONFIG_DIR" "$LOG_DIR" /var/www/certbot "${TARGET_DIR}/.postgresql"
 chown -R "$APP_USER:$APP_USER" "$TARGET_DIR" "$CONFIG_DIR" "$LOG_DIR" /var/www/certbot
 chmod 755 "$TARGET_DIR"
 chmod 750 "$LOG_DIR"
 chmod 755 "$CONFIG_DIR"
+chmod 700 "${TARGET_DIR}/.postgresql"
 
 # Allow git operations in this repository across users
 git config --system --add safe.directory "$TARGET_DIR" 2>/dev/null || git config --global --add safe.directory "$TARGET_DIR" 2>/dev/null || true
@@ -322,7 +323,11 @@ cd "$TARGET_DIR"
 echo -e "\n${BOLD}[7/10] Executing PostgreSQL Database Migrations (Alembic)...${RESET}"
 cd "$TARGET_DIR"
 
-# Export variables for Alembic execution
+# Export variables for Alembic execution and libpq SSL isolation
+export HOME="$TARGET_DIR"
+export PGSSLCERT=""
+export PGSSLKEY=""
+
 set -a
 source "${CONFIG_DIR}/production.env"
 set +a
@@ -353,7 +358,7 @@ fi
 
 # Pre-migration connection health check with fast timeout
 echo -e "  [*] Verifying database connectivity..."
-DB_CHECK_OUTPUT=$(sudo -u "$APP_USER" -E "${TARGET_DIR}/.venv/bin/python" -c "
+DB_CHECK_OUTPUT=$(sudo -u "$APP_USER" -H env HOME="$TARGET_DIR" PGSSLCERT="" PGSSLKEY="" "${TARGET_DIR}/.venv/bin/python" -c "
 import sys
 from app.core.database import verify_database_connection
 try:
@@ -379,12 +384,12 @@ else
   exit 1
 fi
 
-sudo -u "$APP_USER" -E "${TARGET_DIR}/.venv/bin/alembic" upgrade head
+sudo -u "$APP_USER" -H env HOME="$TARGET_DIR" PGSSLCERT="" PGSSLKEY="" "${TARGET_DIR}/.venv/bin/alembic" upgrade head
 echo -e "  ${GREEN}[✓]${RESET} Alembic migrations successfully applied to latest head."
 
 # Run automated readiness check
 echo -e "  [*] Running readiness check utility..."
-sudo -u "$APP_USER" -E "${TARGET_DIR}/.venv/bin/python" "${TARGET_DIR}/scripts/check_server.py" --skip-http
+sudo -u "$APP_USER" -H env HOME="$TARGET_DIR" PGSSLCERT="" PGSSLKEY="" "${TARGET_DIR}/.venv/bin/python" "${TARGET_DIR}/scripts/check_server.py" --skip-http
 
 # ------------------------------------------------------------------------------
 # STEP 8: Systemd Services Deployment & Activation
@@ -537,7 +542,7 @@ echo -e "=======================================================================
 
 # Check if admin user is present
 set +e
-ADMIN_COUNT=$(sudo -u "$APP_USER" -E "${TARGET_DIR}/.venv/bin/python" -c "
+ADMIN_COUNT=$(sudo -u "$APP_USER" -H env HOME="$TARGET_DIR" PGSSLCERT="" PGSSLKEY="" "${TARGET_DIR}/.venv/bin/python" -c "
 from app.core.database import SessionLocal
 from app.models.user import User
 from app.models.rbac import UserRole, Role

@@ -11,6 +11,9 @@ User=omsapp
 Group=omsapp
 WorkingDirectory=/opt/paradox-oms
 EnvironmentFile=/etc/paradox-oms/production.env
+Environment=HOME=/opt/paradox-oms
+Environment=PGSSLCERT=
+Environment=PGSSLKEY=
 ExecStart=/opt/paradox-oms/.venv/bin/uvicorn app.main:app \
     --host 127.0.0.1 \
     --port 8000 \

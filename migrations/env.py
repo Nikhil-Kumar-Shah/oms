@@ -51,9 +51,15 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
+    connect_args = {}
+    if "sslmode" in settings.DATABASE_URL.lower():
+        connect_args["sslcert"] = ""
+        connect_args["sslkey"] = ""
+
     connectable = create_engine(
         settings.DATABASE_URL,
         poolclass=pool.NullPool,
+        connect_args=connect_args,
     )
 
     with connectable.connect() as connection:

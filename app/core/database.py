@@ -18,6 +18,12 @@ settings = get_settings()
 
 # Create Authoritative SQLAlchemy 2.x PostgreSQL Engine
 try:
+    connect_args = {"connect_timeout": 5}
+    # If using SSL, disable client-side certificate probing to prevent permission issues
+    if "sslmode" in settings.DATABASE_URL.lower():
+        connect_args["sslcert"] = ""
+        connect_args["sslkey"] = ""
+
     engine = create_engine(
         settings.DATABASE_URL,
         pool_size=settings.DATABASE_POOL_SIZE,
@@ -25,7 +31,7 @@ try:
         pool_timeout=settings.DATABASE_POOL_TIMEOUT,
         pool_recycle=settings.DATABASE_POOL_RECYCLE,
         pool_pre_ping=True,  # Test connections before checkout
-        connect_args={"connect_timeout": 5},
+        connect_args=connect_args,
         echo=False,
     )
 except Exception as exc:
