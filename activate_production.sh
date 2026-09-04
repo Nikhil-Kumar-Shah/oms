@@ -79,7 +79,7 @@ if [ "$SKIP_DEPS" = false ]; then
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -y
 
-  # Essential system libraries, compilers, Nginx, UFW, PostgreSQL client
+  # Essential system libraries, compilers, Nginx, UFW, PostgreSQL server & client
   apt-get install -y --no-install-recommends \
     curl \
     wget \
@@ -88,6 +88,8 @@ if [ "$SKIP_DEPS" = false ]; then
     software-properties-common \
     ufw \
     nginx \
+    postgresql \
+    postgresql-contrib \
     libpq-dev \
     libssl-dev \
     libffi-dev \
@@ -283,6 +285,58 @@ cd "$TARGET_DIR"
 set -a
 source "${CONFIG_DIR}/production.env"
 set +a
+
+# If DATABASE_URL points to localhost or 127.0.0.1, ensure local PostgreSQL is running and DB exists
+DB_HOST=$(echo "$DATABASE_URL" | sed -E 's#.*@([^:/]+).*#\1#')
+if [ "$DB_HOST" = "127.0.0.1" ] || [ "$DB_HOST" = "localhost" ]; then
+  # Ensure postgresql service is installed, enabled, and started
+  if ! command -v psql &>/dev/null; then
+    echo -e "  [*] Installing local PostgreSQL server..."
+    apt-get install -y --no-install-recommends postgresql postgresql-contrib
+  fi
+
+  if ! systemctl is-active --quiet postgresql; then
+    echo -e "  [*] Starting local PostgreSQL service..."
+    systemctl enable postgresql
+    systemctl start postgresql
+  fi
+
+  # Ensure default user and database exist for localhost connections
+  set +e
+  sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'postgres';" &>/dev/null || true
+  sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = 'paradox_oms'" 2>/dev/null | grep -q 1 || \
+    sudo -u postgres psql -c "CREATE DATABASE paradox_oms OWNER postgres;" &>/dev/null || true
+  sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE paradox_oms TO postgres;" &>/dev/null || true
+  set -e
+fi
+
+# Pre-migration connection health check with retry
+echo -e "  [*] Verifying database connectivity..."
+DB_CONNECTED=false
+for i in {1..15}; do
+  if sudo -u "$APP_USER" -E "${TARGET_DIR}/.venv/bin/python" -c "
+import os, psycopg2
+db_url = os.environ.get('DATABASE_URL', '')
+if '://' in db_url:
+    protocol, rest = db_url.split('://', 1)
+    clean_url = f'postgresql://{rest}'
+    conn = psycopg2.connect(clean_url)
+    conn.close()
+" 2>/dev/null; then
+    DB_CONNECTED=true
+    break
+  fi
+  sleep 1
+done
+
+if [ "$DB_CONNECTED" != true ]; then
+  echo -e "\n  ${RED}[!] ERROR: Cannot connect to PostgreSQL database.${RESET}"
+  echo -e "      Target URL: ${DATABASE_URL}"
+  echo -e "      Please check your database service or edit /etc/paradox-oms/production.env:"
+  echo -e "      ${BOLD}sudo nano /etc/paradox-oms/production.env${RESET}\n"
+  exit 1
+fi
+echo -e "  ${GREEN}[✓]${RESET} Database connection verified."
 
 sudo -u "$APP_USER" -E "${TARGET_DIR}/.venv/bin/alembic" upgrade head
 echo -e "  ${GREEN}[✓]${RESET} Alembic migrations successfully applied to latest head."
