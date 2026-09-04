@@ -29,7 +29,10 @@ CONFIG_DIR="/etc/paradox-oms"
 LOG_DIR="/var/log/paradox-oms"
 SCRIPT_SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-DOMAIN="localhost"
+# Detect public IP address of the virtual machine
+DETECTED_IP=$(curl -s -m 3 ifconfig.me 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}' || echo "127.0.0.1")
+PUBLIC_IP="${DETECTED_IP}"
+DOMAIN="${PUBLIC_IP}"
 SKIP_DEPS=false
 
 # Parse optional arguments
@@ -48,8 +51,13 @@ while [[ $# -gt 0 ]]; do
       exit 0
       ;;
     *)
-      echo "Unknown parameter: $1"
-      exit 1
+      if [[ "$1" != -* ]]; then
+        DOMAIN="$1"
+        shift
+      else
+        echo "Unknown parameter: $1"
+        exit 1
+      fi
       ;;
   esac
 done
@@ -58,7 +66,8 @@ echo -e "\n${CYAN}${BOLD}=======================================================
 echo -e "${CYAN}${BOLD}   PARADOX SPORTS OMS — ONE-CLICK PRODUCTION SERVER ACTIVATOR                 ${RESET}"
 echo -e "${CYAN}${BOLD}==============================================================================${RESET}"
 echo -e "Timestamp: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
-echo -e "Target Domain: ${BOLD}${DOMAIN}${RESET}\n"
+echo -e "Public IP: ${BOLD}${PUBLIC_IP}${RESET}"
+echo -e "Target Domain / Host: ${BOLD}${DOMAIN}${RESET}\n"
 
 # ------------------------------------------------------------------------------
 # STEP 1: Sudo / Root Privilege Verification
@@ -239,6 +248,14 @@ chmod 755 "$CONFIG_DIR"
 chmod 600 "${CONFIG_DIR}/production.env" 2>/dev/null || true
 chmod 644 "${CONFIG_DIR}/frontend.production.env" 2>/dev/null || true
 
+# Ensure ALLOWED_HOSTS and CORS_ORIGINS permit the VM public IP and domain
+if grep -q "^ALLOWED_HOSTS=" "${CONFIG_DIR}/production.env"; then
+  sed -i -E "s#^ALLOWED_HOSTS=.*#ALLOWED_HOSTS=\"${DOMAIN},${PUBLIC_IP},localhost,127.0.0.1,*\"#" "${CONFIG_DIR}/production.env"
+fi
+if grep -q "^CORS_ORIGINS=" "${CONFIG_DIR}/production.env"; then
+  sed -i -E "s#^CORS_ORIGINS=.*#CORS_ORIGINS=\"*\"#" "${CONFIG_DIR}/production.env"
+fi
+
 # Copy configuration files directly to avoid symlink cross-directory access restrictions
 rm -f "${TARGET_DIR}/.env" "${TARGET_DIR}/frontend/.env.local" "${TARGET_DIR}/frontend/.env.production.local"
 cp "${CONFIG_DIR}/production.env" "${TARGET_DIR}/.env"
@@ -383,7 +400,7 @@ upstream paradox_frontend {
 server {
     listen 80;
     listen [::]:80;
-    server_name ${DOMAIN} localhost _;
+    server_name ${DOMAIN} ${PUBLIC_IP} localhost _;
 
     client_max_body_size 25M;
 
@@ -454,7 +471,7 @@ sleep 3
 BACKEND_UP=false
 FRONTEND_UP=false
 
-for i in {1..15}; do
+for i in {1..20}; do
   if curl -sf http://127.0.0.1:8000/health &>/dev/null; then
     BACKEND_UP=true
     break
@@ -462,7 +479,7 @@ for i in {1..15}; do
   sleep 1
 done
 
-for i in {1..15}; do
+for i in {1..20}; do
   if curl -sf http://127.0.0.1:3000 &>/dev/null; then
     FRONTEND_UP=true
     break
@@ -470,18 +487,28 @@ for i in {1..15}; do
   sleep 1
 done
 
-PUBLIC_IP=$(curl -s -m 3 ifconfig.me || hostname -I | awk '{print $1}')
+if [ "$BACKEND_UP" != true ]; then
+  echo -e "  ${RED}[!] Warning: Backend health probe did not respond. Recent log:${RESET}"
+  journalctl -u paradox-backend.service -n 12 --no-pager || true
+fi
 
 echo -e "\n${GREEN}${BOLD}==============================================================================${RESET}"
 echo -e "${GREEN}${BOLD}       PARADOX SPORTS OMS IS ACTIVATED & RUNNING IN PRODUCTION!              ${RESET}"
 echo -e "${GREEN}${BOLD}==============================================================================${RESET}"
-echo -e "  • ${BOLD}Web Portal URL:${RESET}         http://${DOMAIN} (or http://${PUBLIC_IP})"
-echo -e "  • ${BOLD}Backend Health Probe:${RESET}   http://${DOMAIN}/health"
-echo -e "  • ${BOLD}Backend Status:${RESET}         $([ "$BACKEND_UP" = true ] && echo -e "${GREEN}ACTIVE (Port 8000)${RESET}" || echo -e "${RED}WAITING${RESET}")"
-echo -e "  • ${BOLD}Frontend Status:${RESET}        $([ "$FRONTEND_UP" = true ] && echo -e "${GREEN}ACTIVE (Port 3000)${RESET}" || echo -e "${RED}WAITING${RESET}")"
+echo -e "  • ${BOLD}Public Web Portal:${RESET}      ${CYAN}http://${PUBLIC_IP}${RESET} (or http://${DOMAIN})"
+echo -e "  • ${BOLD}Public Health Probe:${RESET}    ${CYAN}http://${PUBLIC_IP}/health${RESET}"
+echo -e "  • ${BOLD}Backend Status:${RESET}         $([ "$BACKEND_UP" = true ] && echo -e "${GREEN}ACTIVE (Port 8000 - Background Daemon)${RESET}" || echo -e "${RED}CHECK LOGS${RESET}")"
+echo -e "  • ${BOLD}Frontend Status:${RESET}        $([ "$FRONTEND_UP" = true ] && echo -e "${GREEN}ACTIVE (Port 3000 - Background Daemon)${RESET}" || echo -e "${RED}CHECK LOGS${RESET}")"
 echo -e "  • ${BOLD}Reverse Proxy:${RESET}          ${GREEN}ACTIVE (Nginx Port 80)${RESET}"
+echo -e "  • ${BOLD}Runtime Mode:${RESET}           ${GREEN}PERMANENT SYSTEMD DAEMONS (24/7 Background)${RESET}"
 echo -e "  • ${BOLD}Service User:${RESET}           ${APP_USER}"
 echo -e "  • ${BOLD}Configuration:${RESET}          ${CONFIG_DIR}/production.env"
+echo -e "=============================================================================="
+echo -e "${BOLD}IMPORTANT DEPLOYMENT NOTES:${RESET}"
+echo -e "  1. ${BOLD}Background Services:${RESET} The application is running in the background as systemd"
+echo -e "     daemons. It does NOT terminate when this script finishes and returns to shell."
+echo -e "  2. ${BOLD}Azure Public Access:${RESET} To access http://${PUBLIC_IP} from your personal computer,"
+echo -e "     ensure your ${BOLD}Azure Network Security Group (NSG)${RESET} allows Inbound Port 80 (HTTP)."
 echo -e "=============================================================================="
 
 # Check if admin user is present
@@ -505,10 +532,10 @@ else
 fi
 
 echo -e "${CYAN}${BOLD}Useful Operational Commands:${RESET}"
-echo -e "  • Check Server Readiness:    ${BOLD}sudo -u omsapp /opt/paradox-oms/.venv/bin/python /opt/paradox-oms/scripts/check_server.py${RESET}"
+echo -e "  • View Service Status:       ${BOLD}sudo systemctl status paradox-backend paradox-frontend nginx${RESET}"
 echo -e "  • View Backend Logs:         ${BOLD}journalctl -u paradox-backend.service -f${RESET}"
 echo -e "  • View Frontend Logs:        ${BOLD}journalctl -u paradox-frontend.service -f${RESET}"
-echo -e "  • Restart Application:       ${BOLD}sudo systemctl restart paradox-oms.target${RESET}"
+echo -e "  • Restart Entire App:        ${BOLD}sudo systemctl restart paradox-oms.target${RESET}"
 if [ "$DOMAIN" != "localhost" ] && [ "$DOMAIN" != "127.0.0.1" ]; then
   echo -e "  • Enable Free SSL (HTTPS):   ${BOLD}sudo certbot --nginx -d ${DOMAIN}${RESET}"
 fi
