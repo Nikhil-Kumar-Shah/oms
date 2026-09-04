@@ -48,7 +48,9 @@ class MeResponse(BaseModel):
     roles: List[UserRoleInfo]
     effective_permissions: List[str]
     verticals: List[UserVerticalInfo]
+    created_at: Optional[datetime] = None
     last_login_at: Optional[datetime] = None
+    current_login_at: Optional[datetime] = None
 
 
 class AuthSuccessResponse(BaseModel):

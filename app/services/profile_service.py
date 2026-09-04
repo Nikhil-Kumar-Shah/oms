@@ -81,6 +81,7 @@ class ProfileService:
             username=user.username if user else None,
             full_name=user.full_name if user else None,
             email=user.email if user else None,
+            account_created_at=user.created_at if user else None,
             phone_number=profile.phone_number,
             specialization=profile.specialization,
             operational_capability=profile.operational_capability,

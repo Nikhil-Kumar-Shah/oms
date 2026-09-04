@@ -182,6 +182,21 @@ class AuthService:
             self.db.flush()
             logger.info(f"Session {session.id} revoked on logout")
 
+    def get_previous_login_at(
+        self,
+        user_id: uuid.UUID,
+        current_session_id: Optional[uuid.UUID] = None,
+    ) -> Optional[datetime]:
+        """
+        Returns the timestamp of the user's previous login session
+        prior to the specified active session.
+        """
+        stmt = select(UserSession.created_at).where(UserSession.user_id == user_id)
+        if current_session_id:
+            stmt = stmt.where(UserSession.id != current_session_id)
+        stmt = stmt.order_by(UserSession.created_at.desc()).limit(1)
+        return self.db.scalar(stmt)
+
     def validate_session(self, raw_token: str) -> Tuple[User, UserSession]:
         """
         Validates session token:

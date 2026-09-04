@@ -40,5 +40,6 @@ class UserProfileResponse(UserProfileBase):
     username: Optional[str] = None
     full_name: Optional[str] = None
     email: Optional[str] = None
+    account_created_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime

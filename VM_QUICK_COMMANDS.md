@@ -51,13 +51,13 @@ sudo systemctl status paradox-backend paradox-frontend nginx
 
 ---
 
-### 6. Maintenance & Clean Test Data (Optional)
+### 6. Wipe All Data & Fresh Admin Setup (Maintenance)
 ```bash
 cd /opt/paradox-oms
 
-# Purge mock/test data while preserving admin and core system configs
-sudo -u omsapp /opt/paradox-oms/.venv/bin/python scripts/clean_test_data.py
+# Wipe ALL operational data (all users, all verticals, all data -> fresh empty database)
+sudo -u omsapp /opt/paradox-oms/.venv/bin/python scripts/clean_data.py --yes
 
-# Provision initial system admin if needed
+# Provision your fresh System Administrator account
 sudo -u omsapp /opt/paradox-oms/.venv/bin/python scripts/create_production_admin.py
 ```

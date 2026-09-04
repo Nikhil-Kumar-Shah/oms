@@ -74,6 +74,8 @@ def login(
     roles_info = [UserRoleInfo(id=r.id, name=r.name, description=r.description) for r in user_roles]
     verts_info = [UserVerticalInfo(id=v.id, name=v.name, is_primary=p) for v, p in user_verticals]
 
+    previous_login = auth_service.get_previous_login_at(user.id, current_session_id=session.id)
+
     me_data = MeResponse(
         id=user.id,
         username=user.username,
@@ -83,7 +85,9 @@ def login(
         roles=roles_info,
         effective_permissions=sorted(effective_perms),
         verticals=verts_info,
-        last_login_at=user.last_login_at,
+        created_at=user.created_at,
+        last_login_at=previous_login,
+        current_login_at=session.created_at,
     )
 
     session_info = SessionInfo(
@@ -131,8 +135,10 @@ def logout(
 )
 def get_me(
     current_user: User = Depends(get_current_user),
+    current_session: UserSession = Depends(get_current_session),
     db: Session = Depends(get_db),
 ) -> MeResponse:
+    auth_service = AuthService(db)
     rbac_service = RbacService(db)
     org_service = OrganizationService(db)
 
@@ -143,6 +149,11 @@ def get_me(
     roles_info = [UserRoleInfo(id=r.id, name=r.name, description=r.description) for r in user_roles]
     verts_info = [UserVerticalInfo(id=v.id, name=v.name, is_primary=p) for v, p in user_verticals]
 
+    previous_login = auth_service.get_previous_login_at(
+        current_user.id,
+        current_session_id=current_session.id if current_session else None,
+    )
+
     return MeResponse(
         id=current_user.id,
         username=current_user.username,
@@ -152,7 +163,9 @@ def get_me(
         roles=roles_info,
         effective_permissions=sorted(effective_perms),
         verticals=verts_info,
-        last_login_at=current_user.last_login_at,
+        created_at=current_user.created_at,
+        last_login_at=previous_login,
+        current_login_at=current_session.created_at if current_session else None,
     )
 
 

@@ -1,20 +1,29 @@
+#!/usr/bin/env python3
 """
-Production Preparation: Test & Development Data Cleanup Script
+Production Database Purge & Fresh Initialization Utility
 Paradox Sports Operations Management System (OMS)
 
-Safely removes development, benchmark, and test-generated data from PostgreSQL
-while strictly preserving all production baseline data:
-- Canonical Organization: Paradox Sports Department (code='PARADOX_SPORTS')
-- Canonical Roles: All 7 RBAC roles (ADMIN, SPORTS_CORE, DEPUTY_CORE, SUPER_COORDINATOR, COORDINATOR, VOLUNTEER, EVENT_TEAM)
-- Canonical Permissions: All 84 permissions & role mappings
-- Core Active Verticals under Paradox Sports
-- System Administrator Account ('admin' / 'admin@paradoxsports.internal')
-- Canonical System Configuration Parameters (CANONICAL_CONFIGS)
-- Authoritative FAQs
+Completely wipes all operational and transactional data across all database tables:
+- Zero users (all user accounts, profiles, sessions, role assignments, and verticals removed)
+- Zero verticals
+- Zero organizations
+- Zero tasks, issues, meetings, requirements, and work reports
+- Zero forms, submissions, responses, and workflow history
+- Zero events, event team profiles, and readiness items
+- Zero calendar entries, announcements, directives, and notifications
+- Zero audit logs and communication logs
 
-Zero schema modification. Pure targeted data purge in reverse foreign key order.
+PRESERVES:
+- All table schemas, constraints, foreign keys, indexes, and types (Zero DDL changes)
+- Alembic migration history (alembic_version preserved so migration state remains at head)
+- Canonical RBAC Roles (7 standard roles) & Core Permissions (84 permissions)
+- Canonical System Configuration Parameters (10 standard operational thresholds)
+
+The resulting database is in a completely clean, pristine, initial state
+ready for fresh production setup.
 """
 
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -23,12 +32,12 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from sqlalchemy import select, text
+from sqlalchemy import inspect, text, select
 from app.core.database import SessionLocal, engine
-from app.models.organization import Organization, Vertical, UserVertical
-from app.models.user import User
 from app.models.governance import SystemConfig, ConfigValueType
+from app.services.rbac_service import ensure_canonical_roles_and_permissions
 
+# Canonical System Configurations
 CANONICAL_CONFIGS = [
     ("system_name", "Paradox Sports OMS", ConfigValueType.STRING, "Official application display title"),
     ("maintenance_mode", "false", ConfigValueType.BOOLEAN, "Global operational maintenance mode flag"),
@@ -42,237 +51,169 @@ CANONICAL_CONFIGS = [
     ("allow_public_forms", "true", ConfigValueType.BOOLEAN, "Allow organization-wide form submissions"),
 ]
 
-CORE_VERTICAL_NAMES = [
-    "Football Operations",
-    "Cricket Operations",
-    "Athletics & Track",
-    "Logistics & Equipment",
-    "Media & Communications",
+# Standard dependency-ordered table list for fallback DELETE execution
+REVERSE_DEPENDENCY_TABLES = [
+    "system_test_records",
+    "notifications",
+    "directive_acknowledgements",
+    "directives",
+    "communication_logs",
+    "ownership_transfers",
+    "daily_report_tasks",
+    "daily_report_history",
+    "daily_work_reports",
+    "weekly_reports",
+    "issue_comments",
+    "issue_assignees",
+    "issue_history",
+    "issues",
+    "task_comments",
+    "task_history",
+    "tasks",
+    "meeting_action_items",
+    "meeting_participants",
+    "meetings",
+    "requirement_messages",
+    "requirements",
+    "form_checklist_items",
+    "form_workflow_history",
+    "form_responses",
+    "form_submissions",
+    "form_distributions",
+    "form_versions",
+    "forms",
+    "event_readiness_items",
+    "event_members",
+    "event_team_profiles",
+    "events",
+    "calendar_entry_users",
+    "calendar_entries",
+    "announcements",
+    "form_reviewers",
+    "user_permission_overrides",
+    "audit_logs",
+    "user_sessions",
+    "user_roles",
+    "user_verticals",
+    "user_profiles",
+    "users",
+    "verticals",
+    "organizations",
+    "faqs",
+    "system_configs",
+    "role_permissions",
+    "permissions",
+    "roles",
 ]
 
 
-def clean_test_data():
+def wipe_entire_database(confirmed: bool = False) -> bool:
+    print("\n" + "=" * 80)
+    print("PARADOX SPORTS OMS — COMPLETE DATABASE DATA PURGE")
+    print("=" * 80)
+    print("WARNING: This operation will permanently wipe ALL operational records:")
+    print("  - ALL Users (including Administrator accounts)")
+    print("  - ALL Verticals and Organizations")
+    print("  - ALL Tasks, Meetings, Events, Issues, Forms, and Reports")
+    print("  - ALL Audit logs, Notifications, and Session tokens")
+    print("  - Schema, tables, and Alembic migration state will remain 100% intact.")
+    print("=" * 80 + "\n")
+
+    if not confirmed:
+        try:
+            choice = input("Are you absolutely sure you want to wipe all data? (yes/no): ").strip().lower()
+        except EOFError:
+            choice = "no"
+        if choice not in ("yes", "y"):
+            print("[-] Operation aborted. No data was modified.")
+            return False
+
     db = SessionLocal()
-    print("=" * 80)
-    print("PARADOX SPORTS OMS - PRODUCTION DATA CLEANUP")
-    print("=" * 80)
-
     try:
-        # 1. Verify Canonical Organization
-        canonical_org = db.scalar(select(Organization).where(Organization.code == "PARADOX_SPORTS"))
-        if not canonical_org:
-            print("[!] Canonical organization 'PARADOX_SPORTS' not found. Creating baseline...")
-            canonical_org = Organization(
-                name="Paradox Sports Department",
-                code="PARADOX_SPORTS",
-                description="Authoritative organization for Paradox Sports Operations",
-                is_active=True,
+        inspector = inspect(engine)
+        existing_tables = set(inspector.get_table_names())
+
+        # Collect all tables except alembic_version
+        tables_to_wipe = [t for t in existing_tables if t != "alembic_version"]
+
+        print(f"[*] Identified {len(tables_to_wipe)} operational tables in PostgreSQL.")
+        print("[*] Executing cascading purge...")
+
+        # Fast atomic wipe: TRUNCATE TABLE ... RESTART IDENTITY CASCADE
+        try:
+            table_list_sql = ", ".join(f'"{t}"' for t in tables_to_wipe)
+            db.execute(text(f"TRUNCATE TABLE {table_list_sql} RESTART IDENTITY CASCADE;"))
+            db.commit()
+            print("  [+] Cascading truncate completed successfully across all tables.")
+        except Exception as truncate_err:
+            db.rollback()
+            print(f"  [!] Notice: Cascading truncate note ({truncate_err}). Falling back to dependency delete...")
+            # Fallback to ordered DELETE
+            for tbl in REVERSE_DEPENDENCY_TABLES:
+                if tbl in existing_tables:
+                    try:
+                        res = db.execute(text(f'DELETE FROM "{tbl}";'))
+                        if res.rowcount > 0:
+                            print(f"  [-] {tbl}: cleared {res.rowcount:,} records")
+                    except Exception as e:
+                        print(f"  [!] {tbl}: skipped ({e})")
+            db.commit()
+
+        # Re-initialize clean system metadata
+        print("\n[*] Initializing clean RBAC baseline and canonical parameters...")
+        ensure_canonical_roles_and_permissions(db)
+
+        # Seed canonical configuration parameters
+        for key, val, vtype, desc in CANONICAL_CONFIGS:
+            db.add(
+                SystemConfig(
+                    key=key,
+                    value=val,
+                    value_type=vtype,
+                    description=desc,
+                    is_active=True,
+                    updated_by_id=None,
+                )
             )
-            db.add(canonical_org)
-            db.flush()
-        print(f"[+] Canonical Organization preserved: {canonical_org.name} (id={canonical_org.id})")
+        db.commit()
+        print("  [+] Canonical RBAC roles and core permissions initialized.")
+        print("  [+] Standard system governance parameters initialized.")
 
-        # 2. Verify Admin User
-        admin_user = db.scalar(select(User).where(User.username == "admin"))
-        admin_id = str(admin_user.id) if admin_user else None
-        if admin_user:
-            print(f"[+] Canonical Admin preserved: {admin_user.username} ({admin_user.email})")
-        else:
-            print("[!] WARNING: 'admin' user not found. Preservation rule will guard against deleting any non-test users.")
-
-        print("\n[*] Purging test records in dependency order...")
-
-        # Purge order
-        purge_steps = [
-            ("system_test_records", "DELETE FROM system_test_records"),
-            ("notifications", "DELETE FROM notifications"),
-            ("directive_acknowledgements", "DELETE FROM directive_acknowledgements"),
-            ("directives", "DELETE FROM directives"),
-            ("communication_logs", "DELETE FROM communication_logs"),
-            ("ownership_transfers", "DELETE FROM ownership_transfers"),
-            ("daily_report_tasks", "DELETE FROM daily_report_tasks"),
-            ("daily_report_history", "DELETE FROM daily_report_history"),
-            ("daily_work_reports", "DELETE FROM daily_work_reports"),
-            ("weekly_reports", "DELETE FROM weekly_reports"),
-            ("issue_comments", "DELETE FROM issue_comments"),
-            ("issue_assignees", "DELETE FROM issue_assignees"),
-            ("issue_history", "DELETE FROM issue_history"),
-            ("issues", "DELETE FROM issues"),
-            ("task_comments", "DELETE FROM task_comments"),
-            ("task_history", "DELETE FROM task_history"),
-            ("tasks", "DELETE FROM tasks"),
-            ("meeting_action_items", "DELETE FROM meeting_action_items"),
-            ("meeting_participants", "DELETE FROM meeting_participants"),
-            ("meetings", "DELETE FROM meetings"),
-            ("requirement_messages", "DELETE FROM requirement_messages"),
-            ("requirements", "DELETE FROM requirements"),
-            ("form_checklist_items", "DELETE FROM form_checklist_items"),
-            ("form_workflow_history", "DELETE FROM form_workflow_history"),
-            ("form_responses", "DELETE FROM form_responses"),
-            ("form_submissions", "DELETE FROM form_submissions"),
-            ("form_distributions", "DELETE FROM form_distributions"),
-            ("form_versions", "DELETE FROM form_versions"),
-            ("forms", "DELETE FROM forms"),
-            ("event_readiness_items", "DELETE FROM event_readiness_items"),
-            ("event_members", "DELETE FROM event_members"),
-            ("event_team_profiles", "DELETE FROM event_team_profiles"),
-            ("events", "DELETE FROM events"),
-            ("calendar_entry_users", "DELETE FROM calendar_entry_users"),
-            ("calendar_entries", "DELETE FROM calendar_entries"),
-            ("announcements", "DELETE FROM announcements"),
-            ("form_reviewers", "DELETE FROM form_reviewers"),
-            ("user_permission_overrides", "DELETE FROM user_permission_overrides"),
-            ("audit_logs", "DELETE FROM audit_logs"),
+        # Post-wipe verification
+        print("\n" + "=" * 80)
+        print("DATABASE PURGE VERIFICATION REPORT:")
+        print("=" * 80)
+        verify_tables = [
+            ("users", "User Accounts"),
+            ("verticals", "Vertical Divisions"),
+            ("organizations", "Organizations"),
+            ("tasks", "Tasks"),
+            ("meetings", "Meetings"),
+            ("events", "Events"),
+            ("issues", "Issues & Incidents"),
+            ("forms", "Forms"),
+            ("audit_logs", "Audit Trail"),
+            ("notifications", "Notifications"),
+            ("roles", "Canonical RBAC Roles"),
+            ("permissions", "RBAC Permissions"),
+            ("system_configs", "Canonical System Configs"),
         ]
 
-        deleted_counts = {}
-        for table_name, delete_sql in purge_steps:
-            try:
-                res = db.execute(text(delete_sql))
-                count = res.rowcount
-                deleted_counts[table_name] = count
-                if count > 0:
-                    print(f"  [-] {table_name}: removed {count:,} test records")
-            except Exception as e:
-                print(f"  [!] {table_name}: skipped ({e})")
+        for tbl, label in verify_tables:
+            if tbl in existing_tables:
+                cnt = db.execute(text(f'SELECT count(*) FROM "{tbl}"')).scalar()
+                print(f"  - {label:<28}: {cnt:>5} records")
 
-        # 3. Clean Test Users (preserve admin)
-        if admin_id:
-            # Reassign authoritative FAQs and System Configs to admin
-            db.execute(
-                text("UPDATE faqs SET created_by_id = :admin_id, updated_by_id = :admin_id"),
-                {"admin_id": admin_id},
-            )
-            db.execute(
-                text("UPDATE system_configs SET updated_by_id = :admin_id"),
-                {"admin_id": admin_id},
-            )
-
-            res = db.execute(text("DELETE FROM user_sessions WHERE user_id != :admin_id"), {"admin_id": admin_id})
-            deleted_counts["user_sessions"] = res.rowcount
-            res = db.execute(text("DELETE FROM user_roles WHERE user_id != :admin_id"), {"admin_id": admin_id})
-            deleted_counts["user_roles"] = res.rowcount
-            res = db.execute(text("DELETE FROM user_verticals WHERE user_id != :admin_id"), {"admin_id": admin_id})
-            deleted_counts["user_verticals"] = res.rowcount
-            res = db.execute(text("DELETE FROM user_profiles WHERE user_id != :admin_id"), {"admin_id": admin_id})
-            deleted_counts["user_profiles"] = res.rowcount
-            res = db.execute(text("DELETE FROM users WHERE id != :admin_id"), {"admin_id": admin_id})
-            deleted_counts["users"] = res.rowcount
-            print(f"  [-] users: removed {deleted_counts['users']:,} test users (preserved admin)")
-
-        # 4. Clean Test Organizations & Associated Verticals (preserve PARADOX_SPORTS & core verticals)
-        res = db.execute(
-            text(
-                "DELETE FROM user_verticals WHERE vertical_id IN ("
-                "  SELECT id FROM verticals WHERE organization_id != :org_id"
-                ")"
-            ),
-            {"org_id": canonical_org.id},
-        )
-        res1 = db.execute(text("DELETE FROM verticals WHERE organization_id != :org_id"), {"org_id": canonical_org.id})
-        res2 = db.execute(
-            text("DELETE FROM verticals WHERE organization_id = :org_id AND name NOT IN :core_names"),
-            {"org_id": canonical_org.id, "core_names": tuple(CORE_VERTICAL_NAMES)},
-        )
-        deleted_counts["verticals"] = res1.rowcount + res2.rowcount
-        print(f"  [-] verticals: removed {deleted_counts['verticals']:,} test verticals")
-
-        res = db.execute(text("DELETE FROM organizations WHERE id != :org_id"), {"org_id": canonical_org.id})
-        deleted_counts["organizations"] = res.rowcount
-        print(f"  [-] organizations: removed {deleted_counts['organizations']:,} test organizations")
-
-        # 5. Ensure Core Verticals exist under PARADOX_SPORTS
-        for vname in CORE_VERTICAL_NAMES:
-            v_exists = db.scalar(
-                select(Vertical).where(Vertical.organization_id == canonical_org.id, Vertical.name == vname)
-            )
-            if not v_exists:
-                db.add(
-                    Vertical(
-                        organization_id=canonical_org.id,
-                        name=vname,
-                        description=f"Standard {vname} division",
-                    )
-                )
-        db.flush()
-
-        # Connect admin to first vertical if not assigned
-        if admin_user:
-            first_v = db.scalar(select(Vertical).where(Vertical.organization_id == canonical_org.id).limit(1))
-            if first_v:
-                user_vert = db.scalar(
-                    select(UserVertical).where(
-                        UserVertical.user_id == admin_user.id, UserVertical.vertical_id == first_v.id
-                    )
-                )
-                if not user_vert:
-                    db.add(UserVertical(user_id=admin_user.id, vertical_id=first_v.id, is_primary=True))
-
-        # 6. Clean System Configurations (keep only the 10 canonical configs)
-        canonical_keys = {k for k, _, _, _ in CANONICAL_CONFIGS}
-        all_cfgs = db.scalars(select(SystemConfig)).all()
-        cfg_del_count = 0
-        for cfg in all_cfgs:
-            if cfg.key not in canonical_keys:
-                db.delete(cfg)
-                cfg_del_count += 1
-        db.flush()
-
-        # Seed missing canonical configs
-        for key, val, vtype, desc in CANONICAL_CONFIGS:
-            existing = db.scalar(select(SystemConfig).where(SystemConfig.key == key))
-            if not existing:
-                db.add(
-                    SystemConfig(
-                        key=key,
-                        value=val,
-                        value_type=vtype,
-                        description=desc,
-                        is_active=True,
-                        updated_by_id=admin_user.id if admin_user else None,
-                    )
-                )
-            else:
-                existing.description = desc
-                existing.value_type = vtype
-                existing.is_active = True
-
-        deleted_counts["system_configs"] = cfg_del_count
-        print(f"  [-] system_configs: removed {cfg_del_count} orphaned test keys")
-
-        db.commit()
-        print("\n" + "=" * 80)
-        print("DATABASE TEST DATA PURGE COMPLETE - SUMMARY:")
         print("=" * 80)
-        total_records_purged = sum(deleted_counts.values())
-        for k, v in deleted_counts.items():
-            if v > 0:
-                print(f"  - {k:<30}: {v:>10,}")
-        print("-" * 80)
-        print(f"  TOTAL TEST RECORDS PURGED: {total_records_purged:>14,}")
-        print("=" * 80)
-
-        # 7. Post-cleanup verification
-        print("\n[*] Post-cleanup database verification:")
-        remaining_users = db.execute(text("SELECT count(*) FROM users")).scalar()
-        remaining_orgs = db.execute(text("SELECT count(*) FROM organizations")).scalar()
-        remaining_verts = db.execute(text("SELECT count(*) FROM verticals")).scalar()
-        remaining_roles = db.execute(text("SELECT count(*) FROM roles")).scalar()
-        remaining_perms = db.execute(text("SELECT count(*) FROM permissions")).scalar()
-        remaining_cfgs = db.execute(text("SELECT count(*) FROM system_configs")).scalar()
-
-        print(f"  - Organizations:  {remaining_orgs} (Paradox Sports Department)")
-        print(f"  - Verticals:      {remaining_verts} (Core Operational Verticals)")
-        print(f"  - Canonical Roles:{remaining_roles} (All 7 Standard Roles)")
-        print(f"  - Permissions:    {remaining_perms} (Complete RBAC Registry)")
-        print(f"  - User Accounts:  {remaining_users} (Primary Administrator)")
-        print(f"  - System Configs: {remaining_cfgs} (Canonical Configurations)")
-
+        print("\n[SUCCESS] The database is now completely clean and pristine!")
+        print("All tables exist with zero operational data.\n")
+        print("Next step: Provision your initial System Administrator account:")
+        print("  python scripts/create_production_admin.py\n")
         return True
 
     except Exception as exc:
         db.rollback()
-        print(f"[FATAL ERROR] Cleanup failed: {exc}")
+        print(f"\n[FATAL ERROR] Data wipe failed: {exc}")
         import traceback
         traceback.print_exc()
         return False
@@ -280,6 +221,19 @@ def clean_test_data():
         db.close()
 
 
-if __name__ == "__main__":
-    success = clean_test_data()
+def main():
+    parser = argparse.ArgumentParser(
+        description="Wipe all operational data from the database while preserving table schemas and RBAC foundation."
+    )
+    parser.add_argument(
+        "-y", "--yes",
+        action="store_true",
+        help="Execute wipe without interactive confirmation prompt.",
+    )
+    args = parser.parse_args()
+    success = wipe_entire_database(confirmed=args.yes)
     sys.exit(0 if success else 1)
+
+
+if __name__ == "__main__":
+    main()

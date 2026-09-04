@@ -53,6 +53,7 @@ export interface UserOperationalProfile {
   certifications?: string[];
   availability: UserAvailability;
   profile_notes?: string;
+  account_created_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -84,6 +85,7 @@ export interface UserProfile {
   created_at?: string;
   updated_at?: string;
   last_login_at?: string;
+  current_login_at?: string;
 }
 
 export interface UserResponse {

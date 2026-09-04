@@ -385,13 +385,23 @@ export default function ProfilePage() {
                   <div>
                     <span className="text-zinc-400 block font-medium">Last Login</span>
                     <span className="font-semibold text-zinc-900 dark:text-zinc-100">
-                      {formatAuditDateTime(activeUser?.last_login_at)}
+                      {activeUser?.last_login_at
+                        ? formatAuditDateTime(activeUser.last_login_at)
+                        : 'First Session (Current)'}
                     </span>
                   </div>
+                  {activeUser?.current_login_at && (
+                    <div>
+                      <span className="text-zinc-400 block font-medium">Current Session Started</span>
+                      <span className="text-zinc-700 dark:text-zinc-300">
+                        {formatAuditDateTime(activeUser.current_login_at)}
+                      </span>
+                    </div>
+                  )}
                   <div>
                     <span className="text-zinc-400 block font-medium">Member Since</span>
                     <span className="text-zinc-700 dark:text-zinc-300">
-                      {formatAuditDateTime(activeUser?.created_at || profile?.created_at)}
+                      {formatAuditDateTime(activeUser?.created_at || profile?.account_created_at || profile?.created_at)}
                     </span>
                   </div>
                 </CardContent>
