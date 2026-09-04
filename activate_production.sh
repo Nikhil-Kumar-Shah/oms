@@ -351,28 +351,33 @@ if [ "$DB_HOST" = "127.0.0.1" ] || [ "$DB_HOST" = "localhost" ]; then
   set -e
 fi
 
-# Pre-migration connection health check with retry
+# Pre-migration connection health check with fast timeout
 echo -e "  [*] Verifying database connectivity..."
-DB_CONNECTED=false
-for i in {1..15}; do
-  if sudo -u "$APP_USER" -E "${TARGET_DIR}/.venv/bin/python" -c "
+DB_CHECK_OUTPUT=$(sudo -u "$APP_USER" -E "${TARGET_DIR}/.venv/bin/python" -c "
+import sys
 from app.core.database import verify_database_connection
-verify_database_connection(timeout_seconds=10.0)
-" 2>/dev/null; then
-    DB_CONNECTED=true
-    break
-  fi
-  sleep 1
-done
+try:
+    info = verify_database_connection(timeout_seconds=5.0)
+    print('CONNECTED')
+except Exception as e:
+    print(f'{e}', file=sys.stderr)
+    sys.exit(1)
+" 2>&1 || true)
 
-if [ "$DB_CONNECTED" != true ]; then
+if echo "$DB_CHECK_OUTPUT" | grep -q "CONNECTED"; then
+  echo -e "  ${GREEN}[✓]${RESET} Database connection verified."
+else
   echo -e "\n  ${RED}[!] ERROR: Cannot connect to PostgreSQL database.${RESET}"
+  echo -e "      Details: ${DB_CHECK_OUTPUT}"
   echo -e "      Target URL: ${DATABASE_URL}"
-  echo -e "      Please check your database service or edit /etc/paradox-oms/production.env:"
-  echo -e "      ${BOLD}sudo nano /etc/paradox-oms/production.env${RESET}\n"
+  echo -e "      Troubleshooting:"
+  echo -e "      1. In Azure Portal -> nikhil-db -> Networking:"
+  echo -e "         Enable 'Allow public access from any Azure service within Azure to this server'"
+  echo -e "         OR add this VM's outbound public IP (${PUBLIC_IP}) to the firewall rules."
+  echo -e "      2. Or check credentials in /etc/paradox-oms/production.env:"
+  echo -e "         ${BOLD}sudo nano /etc/paradox-oms/production.env${RESET}\n"
   exit 1
 fi
-echo -e "  ${GREEN}[✓]${RESET} Database connection verified."
 
 sudo -u "$APP_USER" -E "${TARGET_DIR}/.venv/bin/alembic" upgrade head
 echo -e "  ${GREEN}[✓]${RESET} Alembic migrations successfully applied to latest head."

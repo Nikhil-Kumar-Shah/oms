@@ -25,6 +25,7 @@ try:
         pool_timeout=settings.DATABASE_POOL_TIMEOUT,
         pool_recycle=settings.DATABASE_POOL_RECYCLE,
         pool_pre_ping=True,  # Test connections before checkout
+        connect_args={"connect_timeout": 5},
         echo=False,
     )
 except Exception as exc:
