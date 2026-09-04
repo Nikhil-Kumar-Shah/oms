@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2 class="card-title">PostgreSQL Database Connection Status</h2>
+  
+  {% if db_health.status == 'healthy' %}
+    <div class="alert alert-success">
+      <strong>✓ PostgreSQL Connected:</strong> Live query <code>SELECT 1</code> executed successfully in {{ db_health.latency_ms }} ms.
+    </div>
+  {% else %}
+    <div class="alert alert-error">
+      <strong>✗ PostgreSQL Error:</strong> {{ db_health.error or 'Failed to connect to PostgreSQL.' }}
+    </div>
+  {% endif %}
+
+  <h3 class="card-title" style="margin-top: 1.5rem;">Connection Pool Settings</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Configuration Parameter</th>
+        <th>Configured Value</th>
+        <th>Purpose</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>DATABASE_POOL_SIZE</code></td>
+        <td><strong>{{ pool_size }}</strong></td>
+        <td>Base number of permanent connections in the pool</td>
+      </tr>
+      <tr>
+        <td><code>DATABASE_MAX_OVERFLOW</code></td>
+        <td><strong>{{ max_overflow }}</strong></td>
+        <td>Maximum overflow connections permitted under high load</td>
+      </tr>
+      <tr>
+        <td><code>DATABASE_POOL_TIMEOUT</code></td>
+        <td><strong>{{ pool_timeout }}s</strong></td>
+        <td>Seconds to wait before raising pool checkout timeout</td>
+      </tr>
+      <tr>
+        <td><code>DATABASE_POOL_RECYCLE</code></td>
+        <td><strong>{{ pool_recycle }}s</strong></td>
+        <td>Connection recycling interval to prevent stale drops</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top: 1.5rem;">
+    <a href="/api/v1/health/database" target="_blank" class="btn">View Raw JSON Endpoint &rarr;</a>
+    <a href="/dev/database" class="btn" style="background-color: var(--surface); border: 1px solid var(--border); margin-left: 0.5rem;">Refresh Status</a>
+  </div>
+</div>
+{% endblock %}

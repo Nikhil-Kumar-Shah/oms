@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2 class="card-title">Events & Operational Readiness System</h2>
+
+  {% if error %}
+    <div class="alert alert-error">
+      <strong>✗ Error:</strong> {{ error }}
+    </div>
+  {% endif %}
+
+  {% if message %}
+    <div class="alert alert-success">
+      <strong>✓ Success:</strong> {{ message }}
+    </div>
+  {% endif %}
+
+  <div class="grid-2">
+    <div>
+      <h3 class="card-title">Create Operational Event</h3>
+      <form action="/dev/events/create" method="POST">
+        <div class="form-group">
+          <label for="name">Event Name *</label>
+          <input type="text" id="name" name="name" required placeholder="e.g. Annual Football League - Matchday 1">
+        </div>
+        <div class="form-group">
+          <label for="vertical_id">Vertical Division *</label>
+          <select id="vertical_id" name="vertical_id" required style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            {% for v in verticals %}
+              <option value="{{ v.id }}">{{ v.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="event_type">Event Type</label>
+          <select id="event_type" name="event_type" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            {% for t in event_types %}
+              <option value="{{ t.value }}">{{ t.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="planned_date">Planned Date *</label>
+          <input type="date" id="planned_date" name="planned_date" required style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+        </div>
+        <div class="form-group">
+          <label for="location">Location / Venue</label>
+          <input type="text" id="location" name="location" placeholder="e.g. Main Athletic Stadium - Field 1">
+        </div>
+        <div class="form-group">
+          <label for="society_name">Organizing Society / Body</label>
+          <input type="text" id="society_name" name="society_name" placeholder="e.g. Paradox Football Association">
+        </div>
+        <div class="form-group">
+          <label for="event_head_id">Event Head (Optional)</label>
+          <select id="event_head_id" name="event_head_id" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            <option value="">-- No Event Head --</option>
+            {% for u in users %}
+              <option value="{{ u.id }}">{{ u.username }} ({{ u.full_name }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="primary_poc_id">Primary POC / Coordinator (Optional)</label>
+          <select id="primary_poc_id" name="primary_poc_id" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            <option value="">-- No Primary POC --</option>
+            {% for u in users %}
+              <option value="{{ u.id }}">{{ u.username }} ({{ u.full_name }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="description">Event Description</label>
+          <textarea id="description" name="description" rows="2" placeholder="Event scope, objectives, and participating squads..."></textarea>
+        </div>
+        <button type="submit">Create Event in PostgreSQL &rarr;</button>
+      </form>
+    </div>
+
+    <div>
+      <h3 class="card-title">Server-Side Event & Readiness Rules</h3>
+      <ul style="color: var(--text-muted); padding-left: 1.25rem; line-height: 1.8;">
+        <li><strong>Automatic Checklist Initialization:</strong> Every new event auto-creates 8 structured readiness checkpoints across categories (<code>PLANNING</code>, <code>COORDINATION</code>, <code>TECHNICAL_PREPARATION</code>, etc.).</li>
+        <li><strong>Vertical-Scoped POCs:</strong> Event heads and coordinators must belong to the event's assigned vertical division.</li>
+        <li><strong>Server-Authoritative Lifecycle:</strong> Transitions progress through <code>PLANNING &rarr; IN_PROGRESS &rarr; COMPLETED &rarr; ARCHIVED</code>.</li>
+        <li><strong>Zero Hard Deletion:</strong> Events and teams remain permanently preserved in PostgreSQL.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h3 class="card-title">Events Registry (Total: {{ events | length }})</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Event Name</th>
+        <th>Vertical</th>
+        <th>Type</th>
+        <th>Date</th>
+        <th>Location</th>
+        <th>Head</th>
+        <th>POC</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in events %}
+        <tr>
+          <td><strong>{{ e.name }}</strong></td>
+          <td><span class="badge badge-dev">{{ e.vertical.name if e.vertical else '—' }}</span></td>
+          <td><span style="font-size: 0.8rem;">{{ e.event_type.value }}</span></td>
+          <td style="font-size: 0.85rem; color: #60a5fa;"><strong>{{ e.planned_date }}</strong></td>
+          <td>{{ e.location or 'TBD' }}</td>
+          <td>{{ e.event_head.username if e.event_head else '—' }}</td>
+          <td>{{ e.primary_poc.username if e.primary_poc else '—' }}</td>
+          <td>
+            {% if e.status.value == 'COMPLETED' %}
+              <span class="badge badge-healthy">COMPLETED</span>
+            {% elif e.status.value == 'IN_PROGRESS' %}
+              <span class="badge badge-healthy">IN_PROGRESS</span>
+            {% elif e.status.value == 'PLANNING' %}
+              <span class="badge badge-dev">PLANNING</span>
+            {% else %}
+              <span class="badge badge-unhealthy">{{ e.status.value }}</span>
+            {% endif %}
+          </td>
+          <td>
+            <form action="/dev/events/{{ e.id }}/transition" method="POST" style="display: inline;">
+              {% if e.status.value == 'PLANNING' %}
+                <input type="hidden" name="status" value="IN_PROGRESS">
+                <button type="submit" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; background: #3b82f6;">Start</button>
+              {% elif e.status.value == 'IN_PROGRESS' %}
+                <input type="hidden" name="status" value="COMPLETED">
+                <button type="submit" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; background: #10b981;">Complete</button>
+              {% else %}
+                <span style="font-size: 0.8rem; color: var(--text-muted);">Locked</span>
+              {% endif %}
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 2rem;">No operational events created yet.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

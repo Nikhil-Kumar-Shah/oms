@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+  <h2>⚙️ System Configuration Repository</h2>
+  <p class="subtitle">Manage typed operational settings and application parameters (Zero secrets in database policy enforced).</p>
+
+  {% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
+  {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+  <div class="card" style="margin-bottom: 2rem;">
+    <h3>Define Configuration Key</h3>
+    <form action="/dev/config/create" method="POST">
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+        <div>
+          <label>Config Key *</label>
+          <input type="text" name="key" required placeholder="e.g. default_event_capacity">
+        </div>
+        <div>
+          <label>Value Type *</label>
+          <select name="value_type">
+            {% for vt in value_types %}
+              <option value="{{ vt.value }}">{{ vt.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Value *</label>
+          <input type="text" name="value" required placeholder="e.g. 500 or true">
+        </div>
+      </div>
+
+      <div style="margin-bottom: 1rem;">
+        <label>Description / Operational Purpose</label>
+        <input type="text" name="description" placeholder="Brief context on where this parameter is utilized...">
+      </div>
+
+      <button type="submit">Save Configuration Key</button>
+    </form>
+  </div>
+
+  <h3>Active System Configurations</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Key</th>
+        <th>Value</th>
+        <th>Type</th>
+        <th>Description</th>
+        <th>Last Updated</th>
+        <th>Updated By</th>
+        <th>Update Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in configs %}
+        <tr>
+          <td><code>{{ c.key }}</code></td>
+          <td><strong style="color: #67e8f9;">{{ c.value }}</strong></td>
+          <td><span class="badge badge-dev">{{ c.value_type.value }}</span></td>
+          <td style="font-size: 0.85rem; color: #cbd5e1;">{{ c.description or '-' }}</td>
+          <td style="font-size: 0.8rem; color: #9ca3af;">{{ c.updated_at.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td style="font-size: 0.8rem; color: #9ca3af;">{{ c.updated_by.username if c.updated_by else 'Admin' }}</td>
+          <td>
+            <form action="/dev/config/{{ c.key }}/update" method="POST" style="display: flex; gap: 0.3rem; margin: 0;">
+              <input type="text" name="value" value="{{ c.value }}" style="width: 100px; padding: 0.2rem 0.4rem; font-size: 0.75rem;">
+              <button type="submit" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; background: #3b82f6;">Update</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" style="text-align: center; color: #9ca3af;">No configuration keys defined.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

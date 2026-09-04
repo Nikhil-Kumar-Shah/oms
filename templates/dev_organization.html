@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2 class="card-title">Organization & Verticals Hierarchy</h2>
+  <div class="alert alert-success">
+    <strong>Standard Organization Hierarchy:</strong>
+    <code>Organization ({{ organization.name }}) &rarr; Vertical &rarr; User</code>
+    <span style="display: block; font-size: 0.85rem; margin-top: 0.25rem;">(Strictly No Department Concept)</span>
+  </div>
+
+  {% if error %}
+    <div class="alert alert-error">
+      <strong>✗ Error:</strong> {{ error }}
+    </div>
+  {% endif %}
+
+  {% if message %}
+    <div class="alert alert-success">
+      <strong>✓ Success:</strong> {{ message }}
+    </div>
+  {% endif %}
+
+  <div class="grid-2">
+    <div>
+      <h3 class="card-title">Create Vertical Division</h3>
+      <form action="/dev/organization/verticals" method="POST">
+        <div class="form-group">
+          <label for="name">Vertical Name *</label>
+          <input type="text" id="name" name="name" required placeholder="e.g. Basketball Operations">
+        </div>
+        <div class="form-group">
+          <label for="description">Description</label>
+          <textarea id="description" name="description" rows="3" placeholder="Operational scope of this vertical division"></textarea>
+        </div>
+        <button type="submit">Create Vertical in PostgreSQL &rarr;</button>
+      </form>
+    </div>
+
+    <div>
+      <h3 class="card-title">Organization Profile</h3>
+      <p><strong>Name:</strong> {{ organization.name }}</p>
+      <p><strong>Code:</strong> <code>{{ organization.code }}</code></p>
+      <p><strong>ID:</strong> <code style="font-size: 0.8rem; color: #60a5fa;">{{ organization.id }}</code></p>
+      <p><strong>Description:</strong> {{ organization.description or '—' }}</p>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h3 class="card-title">Active Verticals (Total: {{ verticals | length }})</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Vertical Name</th>
+        <th>Status</th>
+        <th>Description</th>
+        <th>Created At</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for v in verticals %}
+        <tr>
+          <td><strong>{{ v.name }}</strong></td>
+          <td>
+            {% if v.status.value == 'ACTIVE' %}
+              <span class="badge badge-healthy">ACTIVE</span>
+            {% else %}
+              <span class="badge badge-unhealthy">{{ v.status.value }}</span>
+            {% endif %}
+          </td>
+          <td style="color: var(--text-muted);">{{ v.description or '—' }}</td>
+          <td style="font-size: 0.85rem; color: var(--text-muted);">{{ v.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

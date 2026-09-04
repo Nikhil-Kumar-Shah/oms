@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2 class="card-title">Authentication & Session Management Verification</h2>
+  
+  {% if error %}
+    <div class="alert alert-error">
+      <strong>✗ Error:</strong> {{ error }}
+    </div>
+  {% endif %}
+
+  {% if message %}
+    <div class="alert alert-success">
+      <strong>✓ Success:</strong> {{ message }}
+    </div>
+  {% endif %}
+
+  {% if current_user %}
+    <div class="alert alert-success">
+      <strong>✓ Active Session Verified:</strong> Authenticated as <code>{{ current_user.username }}</code> (Status: <span class="badge badge-healthy">{{ current_user.account_status.value }}</span>)
+    </div>
+
+    <div class="grid-2">
+      <div>
+        <h3 class="card-title">User Identity & Assigned Roles</h3>
+        <p><strong>Full Name:</strong> {{ current_user.full_name }}</p>
+        <p><strong>Email:</strong> {{ current_user.email or '—' }}</p>
+        <p><strong>Account Status:</strong> {{ current_user.account_status.value }}</p>
+        <p><strong>Assigned Roles:</strong></p>
+        <div style="margin: 0.5rem 0;">
+          {% for r in roles %}
+            <span class="badge badge-dev">{{ r.name }}</span>
+          {% else %}
+            <span style="color: var(--text-muted);">No roles assigned</span>
+          {% endfor %}
+        </div>
+        <p><strong>Assigned Verticals:</strong></p>
+        <div style="margin: 0.5rem 0;">
+          {% for v, p in verticals %}
+            <span class="badge badge-healthy">{{ v.name }} {% if p %}(Primary){% endif %}</span>
+          {% else %}
+            <span style="color: var(--text-muted);">No verticals assigned</span>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div>
+        <h3 class="card-title">Server-Authoritative Effective Permissions</h3>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.5rem;">
+          Computed on server: <code>(Role Permissions + Grants) - Revokes</code>
+        </p>
+        <div style="max-height: 200px; overflow-y: auto; background: #0f172a; padding: 0.5rem; border-radius: 6px;">
+          {% for p in effective_permissions %}
+            <div style="font-family: monospace; font-size: 0.85rem; color: #60a5fa; padding: 0.2rem 0;">
+              ✓ {{ p }}
+            </div>
+          {% else %}
+            <span style="color: var(--text-muted);">No effective permissions</span>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 1.5rem;">
+      <form action="/dev/auth/logout" method="POST" style="display: inline;">
+        <button type="submit" style="background: #dc2626;">Revoke Session (Logout)</button>
+      </form>
+    </div>
+
+  {% else %}
+    <div class="grid-2">
+      <div>
+        <h3 class="card-title">Login with Server-Side Session</h3>
+        <form action="/dev/auth/login" method="POST">
+          <div class="form-group">
+            <label for="username">Username *</label>
+            <input type="text" id="username" name="username" required value="admin" placeholder="e.g. admin">
+          </div>
+          <div class="form-group">
+            <label for="password">Password *</label>
+            <input type="text" id="password" name="password" required value="AdminPassword@123" placeholder="Enter password">
+          </div>
+          <button type="submit">Authenticate & Create Session &rarr;</button>
+        </form>
+      </div>
+
+      <div>
+        <h3 class="card-title">Security & Session Architecture</h3>
+        <ul style="color: var(--text-muted); padding-left: 1.25rem; line-height: 1.8;">
+          <li><strong>Argon2id:</strong> Password hashing per RFC 9106 standards.</li>
+          <li><strong>Token Hashing:</strong> Raw session tokens hashed with SHA-256 in PostgreSQL.</li>
+          <li><strong>HttpOnly Cookies:</strong> Protected against XSS token extraction.</li>
+          <li><strong>Lifecycle Invalidation:</strong> Disabled accounts and revoked sessions rejected instantly.</li>
+        </ul>
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

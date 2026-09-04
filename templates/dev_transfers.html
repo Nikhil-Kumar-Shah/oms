@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+  <h2>🔄 Resource Ownership & POC Transfers</h2>
+  <p class="subtitle">Structured, audited governance protocol for handing over Tasks, Events, and Requirements between personnel.</p>
+
+  {% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
+  {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+  <div class="card" style="margin-bottom: 2rem;">
+    <h3>Initiate Ownership Transfer Request</h3>
+    <form action="/dev/transfers/create" method="POST">
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+        <div>
+          <label>Resource Type *</label>
+          <select name="resource_type" id="transfer_resource_type">
+            {% for rt in resource_types %}
+              <option value="{{ rt.value }}">{{ rt.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Resource (Task / Event) *</label>
+          <select name="resource_id">
+            <optgroup label="Tasks">
+              {% for t in tasks %}
+                <option value="{{ t.id }}">[Task] {{ t.title }} (Current: {{ t.assigned_to.username if t.assigned_to else 'Unassigned' }})</option>
+              {% endfor %}
+            </optgroup>
+            <optgroup label="Events">
+              {% for e in events %}
+                <option value="{{ e.id }}">[Event] {{ e.name }} (POC: {{ e.primary_poc.username if e.primary_poc else 'Unassigned' }})</option>
+              {% endfor %}
+            </optgroup>
+          </select>
+        </div>
+        <div>
+          <label>Target New Owner *</label>
+          <select name="requested_owner_id" required>
+            {% for u in users %}
+              <option value="{{ u.id }}">{{ u.username }} ({{ u.full_name }})</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 1rem;">
+        <label>Operational Justification / Reason *</label>
+        <textarea name="reason" rows="3" required placeholder="Explain why ownership is being transferred (e.g. unavailability, scope reorganization, rotation)..."></textarea>
+      </div>
+
+      <button type="submit">Submit Transfer Request</button>
+    </form>
+  </div>
+
+  <h3>Transfer Requests & Governance Ledger ({{ total }})</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Created</th>
+        <th>Resource</th>
+        <th>Current Owner &rarr; Requested Owner</th>
+        <th>Requested By</th>
+        <th>Reason</th>
+        <th>Status</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in transfers %}
+        <tr>
+          <td style="font-size: 0.8rem; color: #9ca3af;">{{ t.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td>
+            <span class="badge badge-dev">{{ t.resource_type.value }}</span>
+            <br><code style="font-size: 0.75rem; color: #93c5fd;">{{ t.resource_id }}</code>
+          </td>
+          <td>
+            <strong>{{ t.current_owner.username if t.current_owner else 'Unassigned' }}</strong> &rarr;
+            <strong>{{ t.requested_owner.username if t.requested_owner else 'User' }}</strong>
+          </td>
+          <td style="font-size: 0.85rem;">{{ t.requested_by.username if t.requested_by else 'System' }}</td>
+          <td style="font-size: 0.85rem; color: #cbd5e1;">{{ t.reason }}</td>
+          <td>
+            <span class="badge {% if t.status.value == 'COMPLETED' or t.status.value == 'APPROVED' %}badge-success{% elif t.status.value == 'PENDING' %}badge-warning{% else %}badge-danger{% endif %}">
+              {{ t.status.value }}
+            </span>
+          </td>
+          <td>
+            {% if t.status.value == 'PENDING' and current_user %}
+              <div style="display: flex; gap: 0.35rem;">
+                <form action="/dev/transfers/{{ t.id }}/review" method="POST" style="margin: 0;">
+                  <input type="hidden" name="status" value="APPROVED">
+                  <input type="hidden" name="remarks" value="Approved via Dev Interface">
+                  <button type="submit" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; background: #10b981;">Approve</button>
+                </form>
+                <form action="/dev/transfers/{{ t.id }}/review" method="POST" style="margin: 0;">
+                  <input type="hidden" name="status" value="REJECTED">
+                  <input type="hidden" name="remarks" value="Rejected via Dev Interface">
+                  <button type="submit" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; background: #ef4444;">Reject</button>
+                </form>
+              </div>
+            {% else %}
+              <span style="font-size: 0.75rem; color: #64748b;">Reviewed</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" style="text-align: center; color: #9ca3af;">No ownership transfer requests recorded.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

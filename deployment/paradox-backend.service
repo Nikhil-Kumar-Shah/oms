@@ -1,0 +1,41 @@
+[Unit]
+Description=Paradox Sports OMS Backend Service (FastAPI + Uvicorn)
+Documentation=https://github.com/paradox-sports/oms
+After=network.target postgresql.service
+Wants=postgresql.service
+PartOf=paradox-oms.target
+
+[Service]
+Type=simple
+User=omsapp
+Group=omsapp
+WorkingDirectory=/opt/paradox-oms
+EnvironmentFile=/etc/paradox-oms/production.env
+ExecStart=/opt/paradox-oms/.venv/bin/uvicorn app.main:app \
+    --host 127.0.0.1 \
+    --port 8000 \
+    --workers 4 \
+    --log-level info \
+    --proxy-headers \
+    --forwarded-allow-ips="127.0.0.1"
+
+# Process Management & Lifecycle
+Restart=always
+RestartSec=5s
+KillSignal=SIGTERM
+TimeoutStopSec=30s
+PrivateTmp=true
+
+# Security Hardening
+ProtectSystem=full
+ProtectHome=true
+NoNewPrivileges=true
+LimitNOFILE=65535
+
+# Standard Output & Journal Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=paradox-backend
+
+[Install]
+WantedBy=multi-user.target paradox-oms.target

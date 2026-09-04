@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+  <h2>🛡️ Immutable Audit Center</h2>
+  <p class="subtitle">Complete chronological verification of all security, operational, governance, and identity events.</p>
+
+  <div class="card" style="margin-bottom: 1.5rem; padding: 1rem;">
+    <form action="/dev/audit" method="GET" style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+      <div>
+        <label style="font-size: 0.8rem;">Action Filter</label>
+        <input type="text" name="action" value="{{ filter_action or '' }}" placeholder="e.g. TASK_CREATE, LOGIN" style="padding: 0.4rem; font-size: 0.85rem;">
+      </div>
+      <div>
+        <label style="font-size: 0.8rem;">Resource Type</label>
+        <input type="text" name="resource_type" value="{{ filter_resource or '' }}" placeholder="e.g. TASK, USER" style="padding: 0.4rem; font-size: 0.85rem;">
+      </div>
+      <div>
+        <label style="font-size: 0.8rem;">Outcome</label>
+        <select name="outcome" style="padding: 0.4rem; font-size: 0.85rem;">
+          <option value="">-- Any --</option>
+          <option value="SUCCESS" {% if filter_outcome == 'SUCCESS' %}selected{% endif %}>SUCCESS</option>
+          <option value="FAILURE" {% if filter_outcome == 'FAILURE' %}selected{% endif %}>FAILURE</option>
+        </select>
+      </div>
+      <button type="submit" style="padding: 0.4rem 1rem; font-size: 0.85rem;">Filter Audit Events</button>
+      <a href="/dev/audit" style="font-size: 0.85rem; color: #9ca3af; margin-bottom: 0.5rem;">Reset</a>
+    </form>
+  </div>
+
+  <h3>Audit Event Trail (Total: {{ total }})</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Timestamp (UTC)</th>
+        <th>Action</th>
+        <th>Resource Type</th>
+        <th>Resource ID</th>
+        <th>Actor ID</th>
+        <th>Outcome</th>
+        <th>Details</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for log in audit_logs %}
+        <tr>
+          <td style="font-size: 0.8rem; color: #94a3b8;">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+          <td><span class="badge badge-dev" style="font-size: 0.75rem;">{{ log.action }}</span></td>
+          <td style="font-size: 0.85rem;">{{ log.resource_type }}</td>
+          <td><code style="font-size: 0.75rem; color: #93c5fd;">{{ log.resource_id or '-' }}</code></td>
+          <td><code style="font-size: 0.75rem; color: #cbd5e1;">{{ log.actor_id or 'System' }}</code></td>
+          <td>
+            <span class="badge {% if log.outcome == 'SUCCESS' %}badge-success{% else %}badge-danger{% endif %}" style="font-size: 0.75rem;">
+              {{ log.outcome }}
+            </span>
+          </td>
+          <td style="font-size: 0.75rem; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #9ca3af;">
+            {{ log.details }}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" style="text-align: center; color: #9ca3af;">No audit records found matching criteria.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

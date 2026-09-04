@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ title }} - Paradox Sports OMS (Dev Verification)</title>
+  <link rel="stylesheet" href="/static/css/dev.css">
+  <style>
+    header nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem 0.8rem;
+    }
+    header nav a {
+      font-size: 0.82rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-container">
+      <div class="brand">
+        <span>⚡ Paradox Sports OMS</span>
+        <span class="badge badge-dev">Phase 5: Communication, Governance & Analytics</span>
+      </div>
+      <nav>
+        <a href="/dev">Overview</a>
+        <a href="/dev/analytics">Analytics</a>
+        <a href="/dev/admin-reports">Reports Hub</a>
+        <a href="/dev/announcements">Announcements</a>
+        <a href="/dev/directives">Directives</a>
+        <a href="/dev/notifications">Notifications</a>
+        <a href="/dev/communications">Comm Tracker</a>
+        <a href="/dev/transfers">Transfers</a>
+        <a href="/dev/events">Events</a>
+        <a href="/dev/requirements">Requirements</a>
+        <a href="/dev/meetings">Meetings</a>
+        <a href="/dev/forms">Forms</a>
+        <a href="/dev/my-work">My Work</a>
+        <a href="/dev/tasks">Tasks</a>
+        <a href="/dev/calendar">Calendar</a>
+        <a href="/dev/issues">Issues</a>
+        <a href="/dev/reports">Work Reports</a>
+        <a href="/dev/organization">Organization</a>
+        <a href="/dev/users">Users</a>
+        <a href="/dev/audit">Audit Center</a>
+        <a href="/dev/config">Config</a>
+        <a href="/dev/health">Health</a>
+        <a href="/dev/auth">Auth</a>
+        <a href="/docs" target="_blank">OpenAPI Docs</a>
+      </nav>
+      <div>
+        {% if current_user %}
+          <span style="font-size: 0.85rem; color: #a7f3d0; margin-right: 0.5rem;">
+            ● <strong>{{ current_user.username }}</strong>
+          </span>
+          <form action="/dev/auth/logout" method="POST" style="display: inline;">
+            <button type="submit" style="padding: 0.25rem 0.6rem; font-size: 0.75rem; background: #dc2626;">Logout</button>
+          </form>
+        {% else %}
+          <a href="/dev/auth" style="color: #60a5fa; font-size: 0.85rem; text-decoration: none;">Login &rarr;</a>
+        {% endif %}
+      </div>
+    </div>
+  </header>
+
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer>
+    Paradox Sports OMS &mdash; Phase 5: Communication + Governance + Analytics &bull; PostgreSQL Single Source of Truth
+  </footer>
+</body>
+</html>

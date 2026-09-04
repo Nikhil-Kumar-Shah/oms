@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+  <h2>📑 Administrative Reporting Hub</h2>
+  <p class="subtitle">Authoritative operational compliance and performance reporting generated directly from PostgreSQL.</p>
+
+  <div class="card" style="margin-bottom: 2rem;">
+    <div style="display: flex; gap: 1rem; align-items: center;">
+      <strong>Select Report:</strong>
+      <a href="/dev/admin-reports?report_type=tasks" class="badge {% if report_type == 'tasks' %}badge-success{% else %}badge-dev{% endif %}" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.85rem;">Task Completion</a>
+      <a href="/dev/admin-reports?report_type=events" class="badge {% if report_type == 'events' %}badge-success{% else %}badge-dev{% endif %}" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.85rem;">Event Readiness</a>
+      <a href="/dev/admin-reports?report_type=issues" class="badge {% if report_type == 'issues' %}badge-success{% else %}badge-dev{% endif %}" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.85rem;">Issues & Escalations</a>
+      <a href="/dev/admin-reports?report_type=meetings" class="badge {% if report_type == 'meetings' %}badge-success{% else %}badge-dev{% endif %}" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.85rem;">Meeting RSVPs</a>
+    </div>
+  </div>
+
+  {% if report_data %}
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <div>
+          <h3 style="margin: 0;">{{ report_data.report_name }}</h3>
+          <span style="font-size: 0.8rem; color: #9ca3af;">Generated At: {{ report_data.generated_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC &bull; Total Records: {{ report_data.total_records }}</span>
+        </div>
+      </div>
+
+      {% if report_type == 'tasks' %}
+        <table>
+          <thead>
+            <tr>
+              <th>Vertical Division</th>
+              <th>Total Tasks</th>
+              <th>Completed</th>
+              <th>In Progress</th>
+              <th>Blocked</th>
+              <th>Overdue</th>
+              <th>Completion Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in report_data.records %}
+              <tr>
+                <td><strong>{{ r.vertical_name }}</strong></td>
+                <td>{{ r.total_tasks }}</td>
+                <td style="color: #34d399;">{{ r.completed }}</td>
+                <td>{{ r.in_progress }}</td>
+                <td style="color: #f59e0b;">{{ r.blocked }}</td>
+                <td style="color: #ef4444;">{{ r.overdue }}</td>
+                <td><strong style="color: #60a5fa;">{{ r.completion_rate_pct }}%</strong></td>
+              </tr>
+            {% else %}
+              <tr><td colspan="7" style="text-align: center; color: #9ca3af;">No task records found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+      {% elif report_type == 'events' %}
+        <table>
+          <thead>
+            <tr>
+              <th>Event Name</th>
+              <th>Vertical</th>
+              <th>Type</th>
+              <th>Planned Date</th>
+              <th>Checkpoints</th>
+              <th>Readiness %</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in report_data.records %}
+              <tr>
+                <td><strong>{{ r.event_name }}</strong></td>
+                <td>{{ r.vertical_name or '-' }}</td>
+                <td><span class="badge badge-dev">{{ r.event_type }}</span></td>
+                <td>{{ r.planned_date or 'TBD' }}</td>
+                <td>{{ r.completed_checkpoints }} / {{ r.total_checkpoints }}</td>
+                <td><strong style="color: #34d399;">{{ r.readiness_pct }}%</strong></td>
+                <td><span class="badge badge-info">{{ r.status }}</span></td>
+              </tr>
+            {% else %}
+              <tr><td colspan="7" style="text-align: center; color: #9ca3af;">No event records found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+      {% elif report_type == 'issues' %}
+        <table>
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Vertical</th>
+              <th>Sensitivity</th>
+              <th>Status</th>
+              <th>Escalation Target</th>
+              <th>Raised By</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in report_data.records %}
+              <tr>
+                <td><strong>{{ r.title }}</strong></td>
+                <td>{{ r.vertical_name or '-' }}</td>
+                <td><span class="badge badge-warning">{{ r.sensitivity }}</span></td>
+                <td><span class="badge badge-dev">{{ r.status }}</span></td>
+                <td>{{ r.escalation_target or '-' }}</td>
+                <td>{{ r.raised_by or '-' }}</td>
+                <td style="font-size: 0.8rem; color: #9ca3af;">{{ r.created_at[:16] }}</td>
+              </tr>
+            {% else %}
+              <tr><td colspan="7" style="text-align: center; color: #9ca3af;">No issue records found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+      {% elif report_type == 'meetings' %}
+        <table>
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Total Invited</th>
+              <th>Accepted</th>
+              <th>Declined</th>
+              <th>Pending</th>
+              <th>RSVP Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in report_data.records %}
+              <tr>
+                <td><strong>{{ r.title }}</strong></td>
+                <td>{{ r.meeting_date }}</td>
+                <td><span class="badge badge-dev">{{ r.meeting_type }}</span></td>
+                <td>{{ r.total_invited }}</td>
+                <td style="color: #34d399;">{{ r.accepted }}</td>
+                <td style="color: #ef4444;">{{ r.declined }}</td>
+                <td style="color: #f59e0b;">{{ r.pending }}</td>
+                <td><strong style="color: #60a5fa;">{{ r.acceptance_rate_pct }}%</strong></td>
+              </tr>
+            {% else %}
+              <tr><td colspan="8" style="text-align: center; color: #9ca3af;">No meeting records found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

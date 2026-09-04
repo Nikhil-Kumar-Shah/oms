@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2 class="card-title">Advanced Forms & Structured Submissions</h2>
+
+  {% if error %}
+    <div class="alert alert-error">
+      <strong>✗ Error:</strong> {{ error }}
+    </div>
+  {% endif %}
+
+  {% if message %}
+    <div class="alert alert-success">
+      <strong>✓ Success:</strong> {{ message }}
+    </div>
+  {% endif %}
+
+  <div class="grid-2">
+    <div>
+      <h3 class="card-title">Create Structured Form Definition</h3>
+      <form action="/dev/forms/create" method="POST">
+        <div class="form-group">
+          <label for="name">Form Name *</label>
+          <input type="text" id="name" name="name" required placeholder="e.g. Field Maintenance Work Request">
+        </div>
+        <div class="form-group">
+          <label for="purpose">Purpose / Objective *</label>
+          <input type="text" id="purpose" name="purpose" required placeholder="e.g. Standard equipment order and repair requests">
+        </div>
+        <div class="form-group">
+          <label for="target_audience">Target Audience</label>
+          <select id="target_audience" name="target_audience" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            {% for a in audiences %}
+              <option value="{{ a.value }}">{{ a.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="vertical_id">Vertical Scope (Optional)</label>
+          <select id="vertical_id" name="vertical_id" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            <option value="">-- All Organization --</option>
+            {% for v in verticals %}
+              <option value="{{ v.id }}">{{ v.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="description">Description</label>
+          <textarea id="description" name="description" rows="2" placeholder="Form guidelines and review criteria..."></textarea>
+        </div>
+        <button type="submit">Create & Publish Form (Version 1) &rarr;</button>
+      </form>
+    </div>
+
+    <div>
+      <h3 class="card-title">Structured Data & Transformation Rules</h3>
+      <ul style="color: var(--text-muted); padding-left: 1.25rem; line-height: 1.8;">
+        <li><strong>Immutable Versions:</strong> Published form versions cannot be mutated in-place.</li>
+        <li><strong>Server-Side Validation:</strong> Submissions are strictly verified against the authoritative version schema.</li>
+        <li><strong>Transactional Transformation:</strong> On supervisor approval, structured form data is automatically converted into authoritative records (such as Master Tasks).</li>
+        <li><strong>Self-Approval Block:</strong> Submitter cannot approve their own form response.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h3 class="card-title">Available Forms (Total: {{ forms | length }})</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Form Name</th>
+        <th>Purpose</th>
+        <th>Audience</th>
+        <th>Version</th>
+        <th>Status</th>
+        <th>Submit Sample Response</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in forms %}
+        <tr>
+          <td><strong>{{ f.name }}</strong></td>
+          <td>{{ f.purpose }}</td>
+          <td><span class="badge badge-dev">{{ f.target_audience.value }}</span></td>
+          <td>v{{ f.current_version_number }}</td>
+          <td>
+            {% if f.status.value == 'PUBLISHED' %}
+              <span class="badge badge-healthy">PUBLISHED</span>
+            {% else %}
+              <span class="badge badge-dev">{{ f.status.value }}</span>
+            {% endif %}
+          </td>
+          <td>
+            <form action="/dev/forms/{{ f.id }}/submit" method="POST" style="display: flex; gap: 0.25rem;">
+              <input type="text" name="title" required placeholder="Title" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; width: 120px;">
+              <input type="text" name="details" placeholder="Details" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; width: 120px;">
+              <button type="submit" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; background: #3b82f6;">Submit</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">No form definitions created yet.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h3 class="card-title">Form Submissions & Transformation Stream (Total: {{ submissions | length }})</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Submitted Date</th>
+        <th>Form</th>
+        <th>Submitter</th>
+        <th>Data Payload</th>
+        <th>Status</th>
+        <th>Review & Transform</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in submissions %}
+        <tr>
+          <td style="font-size: 0.85rem; color: #60a5fa;">{{ s.submitted_at.strftime('%Y-%m-%d %H:%M') if s.submitted_at else '—' }}</td>
+          <td><strong>{{ s.form.name if s.form else '—' }}</strong> (v{{ s.form_version.version_number if s.form_version else 1 }})</td>
+          <td>{{ s.submitter.username if s.submitter else '—' }}</td>
+          <td style="font-size: 0.8rem; font-family: monospace; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            {{ s.submission_data }}
+          </td>
+          <td>
+            {% if s.status.value == 'APPROVED' %}
+              <span class="badge badge-healthy">APPROVED</span>
+            {% elif s.status.value == 'REJECTED' %}
+              <span class="badge badge-unhealthy">REJECTED</span>
+            {% else %}
+              <span class="badge badge-dev">{{ s.status.value }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if s.status.value == 'SUBMITTED' %}
+              <form action="/dev/form-submissions/{{ s.id }}/review" method="POST" style="display: inline;">
+                <input type="hidden" name="status" value="APPROVED">
+                <input type="hidden" name="review_comments" value="Approved and transformed to Master Task">
+                <button type="submit" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; background: #10b981;">Approve & Transform</button>
+              </form>
+              <form action="/dev/form-submissions/{{ s.id }}/review" method="POST" style="display: inline; margin-left: 0.25rem;">
+                <input type="hidden" name="status" value="REJECTED">
+                <input type="hidden" name="review_comments" value="Rejected via Dev UI">
+                <button type="submit" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; background: #ef4444;">Reject</button>
+              </form>
+            {% else %}
+              <span style="font-size: 0.8rem; color: #a7f3d0;">
+                {% if s.transformed_entity_type %}
+                  ✓ Transformed to {{ s.transformed_entity_type }}
+                {% else %}
+                  Processed
+                {% endif %}
+              </span>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">No form submissions recorded yet.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

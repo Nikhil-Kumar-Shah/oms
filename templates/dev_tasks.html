@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2 class="card-title">Master Tasks System</h2>
+
+  {% if error %}
+    <div class="alert alert-error">
+      <strong>✗ Error:</strong> {{ error }}
+    </div>
+  {% endif %}
+
+  {% if message %}
+    <div class="alert alert-success">
+      <strong>✓ Success:</strong> {{ message }}
+    </div>
+  {% endif %}
+
+  <div class="grid-2">
+    <div>
+      <h3 class="card-title">Create Master Task</h3>
+      <form action="/dev/tasks/create" method="POST">
+        <div class="form-group">
+          <label for="title">Task Title *</label>
+          <input type="text" id="title" name="title" required placeholder="e.g. Inspect Goalpost Fasteners & Turf">
+        </div>
+        <div class="form-group">
+          <label for="vertical_id">Vertical Division *</label>
+          <select id="vertical_id" name="vertical_id" required style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            {% for v in verticals %}
+              <option value="{{ v.id }}">{{ v.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="task_type">Task Type</label>
+          <select id="task_type" name="task_type" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            {% for t in task_types %}
+              <option value="{{ t.value }}">{{ t.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="priority">Priority</label>
+          <select id="priority" name="priority" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            {% for p in task_priorities %}
+              <option value="{{ p.value }}" {% if p.value == 'MEDIUM' %}selected{% endif %}>{{ p.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="assigned_to_id">Assignee (Optional)</label>
+          <select id="assigned_to_id" name="assigned_to_id" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            <option value="">-- Unassigned --</option>
+            {% for u in users %}
+              <option value="{{ u.id }}">{{ u.username }} ({{ u.full_name }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="deadline">Deadline</label>
+          <input type="datetime-local" id="deadline" name="deadline" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+        </div>
+        <div class="form-group">
+          <label for="description">Description</label>
+          <textarea id="description" name="description" rows="2" placeholder="Task requirements and scope..."></textarea>
+        </div>
+        <button type="submit">Create Master Task in PostgreSQL &rarr;</button>
+      </form>
+    </div>
+
+    <div>
+      <h3 class="card-title">Server-Authoritative Task Rules</h3>
+      <ul style="color: var(--text-muted); padding-left: 1.25rem; line-height: 1.8;">
+        <li><strong>Server-Calculated Health:</strong> <code>COMPLETE</code>, <code>OVERDUE</code>, <code>AT_RISK</code>, <code>BLOCKED</code>, <code>ON_TRACK</code> evaluated server-side.</li>
+        <li><strong>Completion Percentage:</strong> Validated strictly between <code>0%</code> and <code>100%</code>.</li>
+        <li><strong>Immutable Task History:</strong> Every transition, assignment, and update is preserved in PostgreSQL <code>task_history</code>.</li>
+        <li><strong>Vertical Scoped Assignment:</strong> Assignees must be active users assigned to the task's vertical division.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h3 class="card-title">Master Task Registry (Total: {{ tasks | length }})</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Vertical</th>
+        <th>Assignee</th>
+        <th>Type</th>
+        <th>Priority</th>
+        <th>Status</th>
+        <th>Progress</th>
+        <th>Health</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in tasks %}
+        <tr>
+          <td><strong>{{ t.title }}</strong></td>
+          <td><span class="badge badge-dev">{{ t.vertical.name if t.vertical else '—' }}</span></td>
+          <td>{{ t.assigned_to.username if t.assigned_to else 'Unassigned' }}</td>
+          <td><span style="font-size: 0.8rem;">{{ t.task_type.value }}</span></td>
+          <td>
+            {% if t.priority.value == 'CRITICAL' %}
+              <span class="badge badge-unhealthy">CRITICAL</span>
+            {% elif t.priority.value == 'HIGH' %}
+              <span class="badge badge-unhealthy">HIGH</span>
+            {% else %}
+              <span class="badge badge-dev">{{ t.priority.value }}</span>
+            {% endif %}
+          </td>
+          <td><span class="badge badge-healthy">{{ t.status.value }}</span></td>
+          <td>{{ t.completion_percentage }}%</td>
+          <td>
+            {% if t.health.value == 'OVERDUE' or t.health.value == 'BLOCKED' %}
+              <span class="badge badge-unhealthy">{{ t.health.value }}</span>
+            {% else %}
+              <span class="badge badge-healthy">{{ t.health.value }}</span>
+            {% endif %}
+          </td>
+          <td>
+            <form action="/dev/tasks/{{ t.id }}/transition" method="POST" style="display: inline;">
+              {% if t.status.value != 'COMPLETED' %}
+                <input type="hidden" name="status" value="COMPLETED">
+                <button type="submit" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; background: #10b981;">Complete</button>
+              {% else %}
+                <input type="hidden" name="status" value="IN_PROGRESS">
+                <input type="hidden" name="completion_percentage" value="50">
+                <button type="submit" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; background: #3b82f6;">Reopen</button>
+              {% endif %}
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 2rem;">No master tasks recorded yet.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

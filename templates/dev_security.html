@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2 class="card-title">Security Architecture, RBAC & Append-Only Audit Trail</h2>
+  <p style="color: var(--text-muted); margin-bottom: 1rem;">
+    Every security decision is evaluated server-authoritatively. Audit records in PostgreSQL are append-only and strictly immutable.
+  </p>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h3 class="card-title">Canonical System Roles</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Role</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in roles %}
+          <tr>
+            <td><span class="badge badge-dev">{{ r.name }}</span></td>
+            <td style="font-size: 0.85rem; color: var(--text-muted);">{{ r.description }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3 class="card-title">Permission Registry</h3>
+    <div style="max-height: 280px; overflow-y: auto; background: #0f172a; padding: 0.5rem; border-radius: 6px;">
+      <table>
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Category</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in permissions %}
+            <tr>
+              <td><code>{{ p.code }}</code></td>
+              <td><span class="badge badge-healthy">{{ p.category }}</span></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h3 class="card-title" style="margin-bottom: 0; border: none; padding: 0;">
+      Immutable Audit Log Stream (Recent {{ audit_logs | length }})
+    </h3>
+    <a href="/api/v1/admin/audit-logs" target="_blank" class="badge badge-dev" style="text-decoration: none;">View JSON API &rarr;</a>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Timestamp (UTC)</th>
+        <th>Action</th>
+        <th>Resource</th>
+        <th>Outcome</th>
+        <th>Actor ID</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for log in audit_logs %}
+        <tr>
+          <td style="font-size: 0.85rem; color: var(--text-muted);">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+          <td><code>{{ log.action }}</code></td>
+          <td>{{ log.resource_type }}{% if log.resource_id %}:<code style="font-size: 0.8rem;">{{ log.resource_id[:8] }}...</code>{% endif %}</td>
+          <td>
+            {% if log.outcome == 'SUCCESS' %}
+              <span class="badge badge-healthy">SUCCESS</span>
+            {% elif log.outcome == 'DENIED' %}
+              <span class="badge badge-unhealthy">DENIED</span>
+            {% else %}
+              <span class="badge badge-unhealthy">FAILURE</span>
+            {% endif %}
+          </td>
+          <td style="font-size: 0.8rem; color: var(--text-muted);">{{ log.actor_id or 'System/Unauth' }}</td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+            No audit records logged yet.
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

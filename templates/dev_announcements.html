@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+  <h2>📢 Organizational Announcements & Broadcasts</h2>
+  <p class="subtitle">Broadcast official information and updates across the organization, vertical divisions, or targeted personnel.</p>
+
+  {% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
+  {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+  <div class="card" style="margin-bottom: 2rem;">
+    <h3>Draft New Announcement</h3>
+    <form action="/dev/announcements/create" method="POST">
+      <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+        <div>
+          <label>Title *</label>
+          <input type="text" name="title" required placeholder="e.g. Annual Sports Meet 2026 Logistics Schedule">
+        </div>
+        <div>
+          <label>Category</label>
+          <input type="text" name="category" value="GENERAL" placeholder="GENERAL / EVENT / URGENT">
+        </div>
+        <div>
+          <label>Priority</label>
+          <select name="priority">
+            {% for p in priorities %}
+              <option value="{{ p.value }}" {% if p.value == 'NORMAL' %}selected{% endif %}>{{ p.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+        <div>
+          <label>Scope *</label>
+          <select name="scope">
+            {% for s in scopes %}
+              <option value="{{ s.value }}" {% if s.value == 'ALL' %}selected{% endif %}>{{ s.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Target Vertical (if scoped)</label>
+          <select name="vertical_id">
+            <option value="">-- All Organization / None --</option>
+            {% for v in verticals %}
+              <option value="{{ v.id }}">{{ v.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Publish Immediate</label>
+          <select name="publish_now">
+            <option value="true" selected>Publish Immediately & Dispatch Notifications</option>
+            <option value="false">Save as Draft</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 1rem;">
+        <label>Announcement Content *</label>
+        <textarea name="content" rows="4" required placeholder="Detailed operational update, instructions, or broad broadcast info..."></textarea>
+      </div>
+
+      <button type="submit">Broadcast Announcement</button>
+    </form>
+  </div>
+
+  <h3>Published & Active Announcements ({{ total }})</h3>
+  <div style="display: flex; flex-direction: column; gap: 1rem;">
+    {% for a in announcements %}
+      <div class="card" style="border-left: 4px solid {% if a.priority.value == 'URGENT' %}#ef4444{% elif a.priority.value == 'HIGH' %}#f59e0b{% else %}#3b82f6{% endif %};">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <div>
+            <h4 style="margin: 0 0 0.25rem 0;">{{ a.title }}</h4>
+            <span style="font-size: 0.8rem; color: #9ca3af;">
+              Category: <strong>{{ a.category }}</strong> &bull;
+              Scope: <strong>{{ a.scope.value }}</strong> {% if a.vertical %}({{ a.vertical.name }}){% endif %} &bull;
+              Author: <strong>{{ a.author.username if a.author else 'System' }}</strong> &bull;
+              Published: {{ a.published_at.strftime('%Y-%m-%d %H:%M') if a.published_at else 'Draft' }}
+            </span>
+          </div>
+          <div>
+            <span class="badge {% if a.status.value == 'PUBLISHED' %}badge-success{% elif a.status.value == 'DRAFT' %}badge-dev{% else %}badge-neutral{% endif %}">
+              {{ a.status.value }}
+            </span>
+            <span class="badge {% if a.priority.value == 'URGENT' %}badge-danger{% elif a.priority.value == 'HIGH' %}badge-warning{% else %}badge-info{% endif %}">
+              {{ a.priority.value }}
+            </span>
+          </div>
+        </div>
+        <p style="margin: 0.75rem 0 0 0; font-size: 0.95rem; line-height: 1.5; color: #e2e8f0;">{{ a.content }}</p>
+      </div>
+    {% else %}
+      <div class="card" style="text-align: center; color: #9ca3af;">No announcements found.</div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

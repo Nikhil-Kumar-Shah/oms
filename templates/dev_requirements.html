@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2 class="card-title">Cross-Vertical Requirements System</h2>
+
+  {% if error %}
+    <div class="alert alert-error">
+      <strong>✗ Error:</strong> {{ error }}
+    </div>
+  {% endif %}
+
+  {% if message %}
+    <div class="alert alert-success">
+      <strong>✓ Success:</strong> {{ message }}
+    </div>
+  {% endif %}
+
+  <div class="grid-2">
+    <div>
+      <h3 class="card-title">Raise Cross-Vertical Requirement</h3>
+      <form action="/dev/requirements/create" method="POST">
+        <div class="form-group">
+          <label for="title">Requirement Summary *</label>
+          <input type="text" id="title" name="title" required placeholder="e.g. Request 4 Goal Net Sets for Field B">
+        </div>
+        <div class="form-group">
+          <label for="requesting_vertical_id">Requesting Vertical (Source) *</label>
+          <select id="requesting_vertical_id" name="requesting_vertical_id" required style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            {% for v in verticals %}
+              <option value="{{ v.id }}">{{ v.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="target_vertical_id">Target Vertical (Destination) *</label>
+          <select id="target_vertical_id" name="target_vertical_id" required style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            {% for v in verticals %}
+              <option value="{{ v.id }}" {% if loop.index == 2 %}selected{% endif %}>{{ v.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="priority">Priority</label>
+          <select id="priority" name="priority" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            {% for p in priorities %}
+              <option value="{{ p.value }}" {% if p.value == 'MEDIUM' %}selected{% endif %}>{{ p.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="assignee_id">Target Assignee (Optional)</label>
+          <select id="assignee_id" name="assignee_id" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            <option value="">-- Unassigned --</option>
+            {% for u in users %}
+              <option value="{{ u.id }}">{{ u.username }} ({{ u.full_name }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="description">Detailed Requirement Specifications *</label>
+          <textarea id="description" name="description" rows="3" required placeholder="Item counts, quality requirements, delivery location..."></textarea>
+        </div>
+        <button type="submit">Submit Requirement to Target Vertical &rarr;</button>
+      </form>
+    </div>
+
+    <div>
+      <h3 class="card-title">Cross-Vertical Routing Rules</h3>
+      <ul style="color: var(--text-muted); padding-left: 1.25rem; line-height: 1.8;">
+        <li><strong>No Department Terminology:</strong> Strict routing between source <code>Vertical</code> and target <code>Vertical</code>.</li>
+        <li><strong>Server-Side Assignee Check:</strong> Designated assignees must be active members assigned to the destination vertical.</li>
+        <li><strong>Non-Destructive Resolution:</strong> Requirements progress through <code>OPEN &rarr; ASSIGNED &rarr; IN_PROGRESS &rarr; COMPLETED / REJECTED</code>.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h3 class="card-title">Cross-Vertical Requirements Register (Total: {{ requirements | length }})</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Source Vertical</th>
+        <th>Target Vertical</th>
+        <th>Requester</th>
+        <th>Assignee</th>
+        <th>Priority</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in requirements %}
+        <tr>
+          <td><strong>{{ r.title }}</strong></td>
+          <td><span class="badge badge-dev">{{ r.requesting_vertical.name if r.requesting_vertical else '—' }}</span></td>
+          <td><span class="badge badge-dev">{{ r.target_vertical.name if r.target_vertical else '—' }}</span></td>
+          <td>{{ r.requester.username if r.requester else '—' }}</td>
+          <td>{{ r.assignee.username if r.assignee else 'Unassigned' }}</td>
+          <td>
+            {% if r.priority.value == 'CRITICAL' or r.priority.value == 'HIGH' %}
+              <span class="badge badge-unhealthy">{{ r.priority.value }}</span>
+            {% else %}
+              <span class="badge badge-dev">{{ r.priority.value }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if r.status.value == 'COMPLETED' %}
+              <span class="badge badge-healthy">COMPLETED</span>
+            {% elif r.status.value == 'REJECTED' %}
+              <span class="badge badge-unhealthy">REJECTED</span>
+            {% else %}
+              <span class="badge badge-dev">{{ r.status.value }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if r.status.value != 'COMPLETED' and r.status.value != 'REJECTED' %}
+              <form action="/dev/requirements/{{ r.id }}/transition" method="POST" style="display: inline;">
+                <input type="hidden" name="status" value="COMPLETED">
+                <button type="submit" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; background: #10b981;">Complete</button>
+              </form>
+            {% else %}
+              <span style="font-size: 0.8rem; color: #a7f3d0;">✓ Closed</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">No cross-vertical requirements raised yet.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

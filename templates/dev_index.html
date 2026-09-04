@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2 class="card-title">System Status Overview</h2>
+  <div class="grid-2">
+    <div>
+      <p><strong>Application:</strong> {{ app_name }}</p>
+      <p><strong>Version:</strong> {{ version }}</p>
+      <p><strong>Environment:</strong> {{ app_health.environment }}</p>
+      <p><strong>App Health:</strong> 
+        <span class="badge badge-healthy">{{ app_health.status }}</span>
+      </p>
+    </div>
+    <div>
+      <p><strong>Database Authority:</strong> PostgreSQL</p>
+      <p><strong>Database Status:</strong> 
+        {% if db_health.status == 'healthy' %}
+          <span class="badge badge-healthy">Connected ({{ db_health.latency_ms }} ms)</span>
+        {% else %}
+          <span class="badge badge-unhealthy">Unhealthy</span>
+        {% endif %}
+      </p>
+      <p><strong>Timestamp:</strong> {{ app_health.timestamp }}</p>
+    </div>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h3 class="card-title">Database Verification</h3>
+    <p style="color: var(--text-muted); margin-bottom: 1rem;">
+      Check live PostgreSQL connectivity, connection pool metrics, and transaction latency.
+    </p>
+    <a href="/dev/database" class="btn">View Database Status &rarr;</a>
+  </div>
+
+  <div class="card">
+    <h3 class="card-title">Test Records Persistence</h3>
+    <p style="color: var(--text-muted); margin-bottom: 1rem;">
+      Verify live CRUD persistence, transactions, and retrieval of <code>SystemTestRecord</code>.
+    </p>
+    <a href="/dev/test-records" class="btn">Manage Test Records &rarr;</a>
+  </div>
+</div>
+
+<div class="card">
+  <h3 class="card-title">Phase 1 Foundation Verification Checklist</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Component</th>
+        <th>Standard</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Architecture</td>
+        <td>FastAPI &rarr; Logic &rarr; SQLAlchemy 2.x &rarr; PostgreSQL</td>
+        <td><span class="badge badge-healthy">Active</span></td>
+      </tr>
+      <tr>
+        <td>Organization Hierarchy</td>
+        <td>Organization &rarr; Vertical &rarr; User (No Department concept)</td>
+        <td><span class="badge badge-healthy">Compliant</span></td>
+      </tr>
+      <tr>
+        <td>Database Driver & Pool</td>
+        <td>psycopg2 / SQLAlchemy connection pool with pre-ping</td>
+        <td><span class="badge badge-healthy">Configured</span></td>
+      </tr>
+      <tr>
+        <td>Migrations</td>
+        <td>Alembic revision tracking</td>
+        <td><span class="badge badge-healthy">Ready</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}

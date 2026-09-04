@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+  <h2>📞 Official Communication Tracker</h2>
+  <p class="subtitle">Log and track formal external and operational communications (letters, official notices, critical phone calls, emails).</p>
+
+  {% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
+  {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+  <div class="card" style="margin-bottom: 2rem;">
+    <h3>Record Official Communication</h3>
+    <form action="/dev/communications/create" method="POST">
+      <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+        <div>
+          <label>Subject / Matter *</label>
+          <input type="text" name="subject" required placeholder="e.g. Ground Booking Permission Clearance Letter">
+        </div>
+        <div>
+          <label>Communication Type *</label>
+          <select name="communication_type">
+            {% for ct in comm_types %}
+              <option value="{{ ct.value }}">{{ ct.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Vertical Division</label>
+          <select name="vertical_id">
+            <option value="">-- General / All --</option>
+            {% for v in verticals %}
+              <option value="{{ v.id }}">{{ v.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+        <div>
+          <label>Sender Info *</label>
+          <input type="text" name="sender_info" required placeholder="e.g. Sports Complex Authority / Director Desk">
+        </div>
+        <div>
+          <label>Recipient Info *</label>
+          <input type="text" name="recipient_info" required placeholder="e.g. Paradox Sports Core / Operations Lead">
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+        <div>
+          <label>Reference Link / Document URL</label>
+          <input type="text" name="reference_link" placeholder="https://docs.google.com/letter.pdf or internal reference">
+        </div>
+        <div>
+          <label>Operational Remarks</label>
+          <input type="text" name="remarks" placeholder="Key decisions, actionable takeaways...">
+        </div>
+      </div>
+
+      <button type="submit">Record Communication Entry</button>
+    </form>
+  </div>
+
+  <h3>Logged Communications ({{ total }})</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Date & Time</th>
+        <th>Type</th>
+        <th>Subject</th>
+        <th>Sender &rarr; Recipient</th>
+        <th>Vertical</th>
+        <th>Remarks</th>
+        <th>Recorded By</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for l in logs %}
+        <tr>
+          <td>{{ l.date_time.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td><span class="badge badge-dev">{{ l.communication_type.value }}</span></td>
+          <td>
+            <strong>{{ l.subject }}</strong>
+            {% if l.reference_link %}
+              <br><a href="{{ l.reference_link }}" target="_blank" style="font-size: 0.75rem; color: #60a5fa;">Document Link &rarr;</a>
+            {% endif %}
+          </td>
+          <td>{{ l.sender_info }} &rarr; {{ l.recipient_info }}</td>
+          <td>{{ l.vertical.name if l.vertical else '-' }}</td>
+          <td style="font-size: 0.85rem; color: #cbd5e1;">{{ l.remarks or '-' }}</td>
+          <td style="font-size: 0.8rem; color: #9ca3af;">{{ l.created_by.username if l.created_by else 'Admin' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" style="text-align: center; color: #9ca3af;">No communication records found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

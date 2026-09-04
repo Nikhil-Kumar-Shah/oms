@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2 class="card-title">System Test Records (Verification Entity)</h2>
+  <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
+    This table proves real PostgreSQL persistence, transactions (BEGIN &rarr; COMMIT), and data retrieval via SQLAlchemy 2.x.
+  </p>
+
+  {% if created_id %}
+    <div class="alert alert-success">
+      <strong>✓ Record Persisted:</strong> Successfully committed test record with ID <code>{{ created_id }}</code> to PostgreSQL.
+    </div>
+  {% endif %}
+
+  {% if error %}
+    <div class="alert alert-error">
+      <strong>✗ Error:</strong> {{ error }}
+    </div>
+  {% endif %}
+
+  <div class="grid-2">
+    <div>
+      <h3 class="card-title">Create New Test Record</h3>
+      <form action="/dev/test-records" method="POST">
+        <div class="form-group">
+          <label for="name">Record Name *</label>
+          <input type="text" id="name" name="name" required placeholder="e.g. Foundation Integrity Check 01">
+        </div>
+        <div class="form-group">
+          <label for="description">Description (Optional)</label>
+          <textarea id="description" name="description" rows="3" placeholder="Additional test context or metadata"></textarea>
+        </div>
+        <button type="submit">Commit to PostgreSQL &rarr;</button>
+      </form>
+    </div>
+
+    <div>
+      <h3 class="card-title">Persistence Test Instructions</h3>
+      <ol style="color: var(--text-muted); padding-left: 1.25rem; line-height: 1.8;">
+        <li>Enter a record name and submit the form above.</li>
+        <li>Observe the transaction commit and new row in the list below.</li>
+        <li>Hard refresh the browser (Ctrl+F5) to prove data is retrieved fresh from PostgreSQL.</li>
+        <li>Inspect via API: <code>/api/v1/test-records</code>.</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h3 class="card-title" style="margin-bottom: 0; border: none; padding: 0;">
+      Persisted Records (Total: {{ total }})
+    </h3>
+    <a href="/api/v1/test-records" target="_blank" class="badge badge-dev" style="text-decoration: none;">View JSON API &rarr;</a>
+  </div>
+
+  {% if records %}
+    <table>
+      <thead>
+        <tr>
+          <th>ID (UUID)</th>
+          <th>Name</th>
+          <th>Description</th>
+          <th>Created At (UTC)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in records %}
+          <tr>
+            <td><code style="color: #60a5fa;">{{ r.id }}</code></td>
+            <td><strong>{{ r.name }}</strong></td>
+            <td style="color: var(--text-muted);">{{ r.description or '—' }}</td>
+            <td style="font-size: 0.85rem; color: var(--text-muted);">{{ r.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p style="color: var(--text-muted); text-align: center; padding: 2rem;">
+      No test records in PostgreSQL yet. Create one using the form above!
+    </p>
+  {% endif %}
+</div>
+{% endblock %}

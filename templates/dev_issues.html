@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2 class="card-title">Issue & Escalation Register</h2>
+
+  {% if error %}
+    <div class="alert alert-error">
+      <strong>✗ Error:</strong> {{ error }}
+    </div>
+  {% endif %}
+
+  {% if message %}
+    <div class="alert alert-success">
+      <strong>✓ Success:</strong> {{ message }}
+    </div>
+  {% endif %}
+
+  <div class="grid-2">
+    <div>
+      <h3 class="card-title">Raise Operational Issue</h3>
+      <form action="/dev/issues/create" method="POST">
+        <div class="form-group">
+          <label for="title">Issue Summary *</label>
+          <input type="text" id="title" name="title" required placeholder="e.g. Broken floodlight near Track Corner 3">
+        </div>
+        <div class="form-group">
+          <label for="vertical_id">Vertical Division *</label>
+          <select id="vertical_id" name="vertical_id" required style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            {% for v in verticals %}
+              <option value="{{ v.id }}">{{ v.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="sensitivity">Sensitivity Classification</label>
+          <select id="sensitivity" name="sensitivity" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            {% for s in sensitivities %}
+              <option value="{{ s.value }}" {% if s.value == 'NORMAL' %}selected{% endif %}>{{ s.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="assigned_to_id">Assigned Resolver (Optional)</label>
+          <select id="assigned_to_id" name="assigned_to_id" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            <option value="">-- Unassigned --</option>
+            {% for u in users %}
+              <option value="{{ u.id }}">{{ u.username }} ({{ u.full_name }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="description">Detailed Problem Description *</label>
+          <textarea id="description" name="description" rows="3" required placeholder="Observed defect, impacted areas, immediate risks..."></textarea>
+        </div>
+        <button type="submit">Log Issue into PostgreSQL &rarr;</button>
+      </form>
+    </div>
+
+    <div>
+      <h3 class="card-title">Sensitivity & Escalation Security</h3>
+      <ul style="color: var(--text-muted); padding-left: 1.25rem; line-height: 1.8;">
+        <li><strong>Confidential Protection:</strong> <code>CONFIDENTIAL</code> issues are inaccessible to ordinary coordinators/volunteers outside leadership or direct ownership.</li>
+        <li><strong>Escalation Audit Trail:</strong> Escalation records target, action, and timestamp in immutable <code>issue_history</code>.</li>
+        <li><strong>Non-Destructive Lifecycle:</strong> Issues progress through <code>OPEN &rarr; IN_PROGRESS &rarr; ESCALATED &rarr; RESOLVED &rarr; CLOSED</code> with zero hard deletion.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h3 class="card-title">Issue Register (Total: {{ issues | length }})</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Issue</th>
+        <th>Vertical</th>
+        <th>Raised By</th>
+        <th>Assignee</th>
+        <th>Sensitivity</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for i in issues %}
+        <tr>
+          <td><strong>{{ i.title }}</strong></td>
+          <td><span class="badge badge-dev">{{ i.vertical.name if i.vertical else '—' }}</span></td>
+          <td>{{ i.raised_by.username if i.raised_by else '—' }}</td>
+          <td>{{ i.assigned_to.username if i.assigned_to else 'Unassigned' }}</td>
+          <td>
+            {% if i.sensitivity.value == 'CONFIDENTIAL' %}
+              <span class="badge badge-unhealthy">CONFIDENTIAL</span>
+            {% elif i.sensitivity.value == 'SENSITIVE' %}
+              <span class="badge badge-dev">SENSITIVE</span>
+            {% else %}
+              <span style="font-size: 0.8rem; color: var(--text-muted);">NORMAL</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if i.status.value == 'ESCALATED' or i.status.value == 'BLOCKED' %}
+              <span class="badge badge-unhealthy">{{ i.status.value }}</span>
+            {% elif i.status.value == 'RESOLVED' or i.status.value == 'CLOSED' %}
+              <span class="badge badge-healthy">{{ i.status.value }}</span>
+            {% else %}
+              <span class="badge badge-dev">{{ i.status.value }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if i.status.value != 'RESOLVED' and i.status.value != 'CLOSED' %}
+              <form action="/dev/issues/{{ i.id }}/resolve" method="POST" style="display: inline;">
+                <input type="hidden" name="resolution" value="Resolved via Dev UI">
+                <button type="submit" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; background: #10b981;">Resolve</button>
+              </form>
+            {% else %}
+              <span style="font-size: 0.8rem; color: #a7f3d0;">✓ Resolved</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">No issues recorded yet.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+  <h2>📜 Operational Directives & Governance Compliance</h2>
+  <p class="subtitle">Issue authoritative operational directives that require formal, individual user acknowledgement and compliance tracking.</p>
+
+  {% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
+  {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+  <div class="card" style="margin-bottom: 2rem;">
+    <h3>Issue Operational Directive</h3>
+    <form action="/dev/directives/create" method="POST">
+      <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+        <div>
+          <label>Directive Title *</label>
+          <input type="text" name="title" required placeholder="e.g. Mandatory Equipment Check-in Compliance Protocol">
+        </div>
+        <div>
+          <label>Priority</label>
+          <select name="priority">
+            {% for p in priorities %}
+              <option value="{{ p.value }}" {% if p.value == 'MEDIUM' %}selected{% endif %}>{{ p.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Scope *</label>
+          <select name="scope">
+            {% for s in scopes %}
+              <option value="{{ s.value }}" {% if s.value == 'ALL' %}selected{% endif %}>{{ s.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+        <div>
+          <label>Target Vertical (if scoped)</label>
+          <select name="vertical_id">
+            <option value="">-- All Organization / None --</option>
+            {% for v in verticals %}
+              <option value="{{ v.id }}">{{ v.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Issue Mode</label>
+          <select name="issue_now">
+            <option value="true" selected>Issue Immediately (Initialize Roster & Notify)</option>
+            <option value="false">Save as Draft</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 1rem;">
+        <label>Instruction & Policy Text *</label>
+        <textarea name="instruction" rows="4" required placeholder="State exact mandatory actions, compliance procedures, and required protocols..."></textarea>
+      </div>
+
+      <button type="submit">Issue Directive</button>
+    </form>
+  </div>
+
+  <h3>Active Directives & Compliance Roster ({{ total }})</h3>
+  <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+    {% for d in directives %}
+      <div class="card" style="border-left: 4px solid #8b5cf6;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <div>
+            <h4 style="margin: 0 0 0.25rem 0;">{{ d.title }}</h4>
+            <span style="font-size: 0.8rem; color: #9ca3af;">
+              Issued By: <strong>{{ d.issued_by.username if d.issued_by else 'Core Admin' }}</strong> &bull;
+              Scope: <strong>{{ d.scope.value }}</strong> {% if d.vertical %}({{ d.vertical.name }}){% endif %} &bull;
+              Date: {{ d.effective_date }} &bull;
+              Requires Ack: <strong>{{ 'Yes' if d.requires_acknowledgement else 'No' }}</strong>
+            </span>
+          </div>
+          <div>
+            <span class="badge badge-dev">{{ d.status.value }}</span>
+            <span class="badge badge-info">{{ d.priority.value }}</span>
+          </div>
+        </div>
+
+        <p style="margin: 0.75rem 0; font-size: 0.95rem; line-height: 1.5; color: #e2e8f0;">{{ d.instruction }}</p>
+
+        {% if d.requires_acknowledgement and current_user %}
+          {% set user_acked = false %}
+          {% for ack in d.acknowledgements %}
+            {% if ack.user_id == current_user.id and ack.status.value == 'ACKNOWLEDGED' %}
+              {% set user_acked = true %}
+            {% endif %}
+          {% endfor %}
+
+          <div style="margin-top: 1rem; padding: 0.75rem; background: #1e293b; border-radius: 6px;">
+            {% if user_acked %}
+              <span style="color: #34d399; font-size: 0.85rem; font-weight: bold;">✔ You have acknowledged this directive.</span>
+            {% else %}
+              <form action="/dev/directives/{{ d.id }}/acknowledge" method="POST" style="display: flex; gap: 0.5rem; align-items: center;">
+                <input type="text" name="notes" placeholder="Optional acknowledgement notes..." style="flex: 1; padding: 0.35rem 0.6rem; font-size: 0.85rem;">
+                <button type="submit" style="padding: 0.35rem 0.8rem; font-size: 0.85rem; background: #10b981;">Acknowledge & Sign</button>
+              </form>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {% if d.acknowledgements %}
+          <div style="margin-top: 1rem;">
+            <strong style="font-size: 0.85rem; color: #cbd5e1;">Acknowledgement Roster:</strong>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
+              {% for ack in d.acknowledgements %}
+                <span class="badge {% if ack.status.value == 'ACKNOWLEDGED' %}badge-success{% else %}badge-warning{% endif %}" style="font-size: 0.75rem;">
+                  {{ ack.user.username if ack.user else 'User' }}: {{ ack.status.value }} {% if ack.acknowledged_at %}({{ ack.acknowledged_at.strftime('%m-%d %H:%M') }}){% endif %}
+                </span>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="card" style="text-align: center; color: #9ca3af;">No directives issued yet.</div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2 class="card-title">Operational Meetings & RSVPs</h2>
+
+  {% if error %}
+    <div class="alert alert-error">
+      <strong>✗ Error:</strong> {{ error }}
+    </div>
+  {% endif %}
+
+  {% if message %}
+    <div class="alert alert-success">
+      <strong>✓ Success:</strong> {{ message }}
+    </div>
+  {% endif %}
+
+  <div class="grid-2">
+    <div>
+      <h3 class="card-title">Schedule Operational Meeting</h3>
+      <form action="/dev/meetings/create" method="POST">
+        <div class="form-group">
+          <label for="title">Meeting Title *</label>
+          <input type="text" id="title" name="title" required placeholder="e.g. Referee & Line Judge Technical Briefing">
+        </div>
+        <div class="form-group">
+          <label for="meeting_date">Meeting Date *</label>
+          <input type="date" id="meeting_date" name="meeting_date" required style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+        </div>
+        <div class="form-group">
+          <label for="meeting_type">Meeting Type</label>
+          <select id="meeting_type" name="meeting_type" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            {% for t in meeting_types %}
+              <option value="{{ t.value }}">{{ t.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="vertical_id">Vertical Division (Optional)</label>
+          <select id="vertical_id" name="vertical_id" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            <option value="">-- All Verticals / General --</option>
+            {% for v in verticals %}
+              <option value="{{ v.id }}">{{ v.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="event_id">Linked Event (Optional)</label>
+          <select id="event_id" name="event_id" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            <option value="">-- No Linked Event --</option>
+            {% for e in events %}
+              <option value="{{ e.id }}">{{ e.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="location">Location / Venue</label>
+          <input type="text" id="location" name="location" placeholder="e.g. Conference Room A / Virtual Link">
+        </div>
+        <div class="form-group">
+          <label for="description">Agenda & Notes</label>
+          <textarea id="description" name="description" rows="2" placeholder="Meeting objectives, discussion topics..."></textarea>
+        </div>
+        <button type="submit">Schedule Meeting in PostgreSQL &rarr;</button>
+      </form>
+    </div>
+
+    <div>
+      <h3 class="card-title">Meeting & Participant Rules</h3>
+      <ul style="color: var(--text-muted); padding-left: 1.25rem; line-height: 1.8;">
+        <li><strong>Organizer Auto-Accepted:</strong> Organizer is automatically recorded as an accepted participant.</li>
+        <li><strong>Server-Side RSVP:</strong> Participants submit <code>ACCEPTED</code>, <code>DECLINED</code>, or <code>TENTATIVE</code> responses with server-recorded timestamps.</li>
+        <li><strong>Rescheduling Integrity:</strong> Rescheduling retains historical audit trail and prompts participants for fresh RSVPs.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h3 class="card-title">Scheduled Meetings (Total: {{ meetings | length }})</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Meeting Title</th>
+        <th>Organizer</th>
+        <th>Vertical</th>
+        <th>Event</th>
+        <th>Type</th>
+        <th>Location</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in meetings %}
+        <tr>
+          <td style="font-size: 0.85rem; color: #60a5fa;"><strong>{{ m.meeting_date }}</strong></td>
+          <td><strong>{{ m.title }}</strong></td>
+          <td>{{ m.organizer.username if m.organizer else '—' }}</td>
+          <td>{{ m.vertical.name if m.vertical else 'Global' }}</td>
+          <td>{{ m.event.name if m.event else '—' }}</td>
+          <td><span class="badge badge-dev">{{ m.meeting_type.value }}</span></td>
+          <td>{{ m.location or 'Online' }}</td>
+          <td>
+            {% if m.status.value == 'COMPLETED' %}
+              <span class="badge badge-healthy">COMPLETED</span>
+            {% elif m.status.value == 'CANCELLED' %}
+              <span class="badge badge-unhealthy">CANCELLED</span>
+            {% else %}
+              <span class="badge badge-healthy">{{ m.status.value }}</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">No operational meetings scheduled yet.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

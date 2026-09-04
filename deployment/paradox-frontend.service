@@ -1,0 +1,38 @@
+[Unit]
+Description=Paradox Sports OMS Frontend Service (Next.js Production)
+Documentation=https://github.com/paradox-sports/oms
+After=network.target paradox-backend.service
+Wants=paradox-backend.service
+PartOf=paradox-oms.target
+
+[Service]
+Type=simple
+User=omsapp
+Group=omsapp
+WorkingDirectory=/opt/paradox-oms/frontend
+EnvironmentFile=/etc/paradox-oms/frontend.production.env
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOSTNAME=127.0.0.1
+ExecStart=/usr/bin/node /opt/paradox-oms/frontend/node_modules/next/dist/bin/next start -p 3000 -H 127.0.0.1
+
+# Process Management & Lifecycle
+Restart=always
+RestartSec=5s
+KillSignal=SIGTERM
+TimeoutStopSec=30s
+PrivateTmp=true
+
+# Security Hardening
+ProtectSystem=full
+ProtectHome=true
+NoNewPrivileges=true
+LimitNOFILE=65535
+
+# Standard Output & Journal Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=paradox-frontend
+
+[Install]
+WantedBy=multi-user.target paradox-oms.target

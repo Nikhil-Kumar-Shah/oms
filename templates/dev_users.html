@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2 class="card-title">User Management & Account Lifecycle</h2>
+
+  {% if error %}
+    <div class="alert alert-error">
+      <strong>✗ Error:</strong> {{ error }}
+    </div>
+  {% endif %}
+
+  {% if message %}
+    <div class="alert alert-success">
+      <strong>✓ Success:</strong> {{ message }}
+    </div>
+  {% endif %}
+
+  <div class="grid-2">
+    <div>
+      <h3 class="card-title">Create User Account</h3>
+      <form action="/dev/users/create" method="POST">
+        <div class="form-group">
+          <label for="username">Username *</label>
+          <input type="text" id="username" name="username" required placeholder="e.g. john_coordinator">
+        </div>
+        <div class="form-group">
+          <label for="full_name">Full Name *</label>
+          <input type="text" id="full_name" name="full_name" required placeholder="e.g. John Doe">
+        </div>
+        <div class="form-group">
+          <label for="email">Email (Optional)</label>
+          <input type="text" id="email" name="email" placeholder="e.g. john@paradoxsports.internal">
+        </div>
+        <div class="form-group">
+          <label for="password">Password (min 8 chars) *</label>
+          <input type="text" id="password" name="password" required value="SecurePass@123" placeholder="Password">
+        </div>
+        <div class="form-group">
+          <label for="role_id">Initial Canonical Role</label>
+          <select id="role_id" name="role_id" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            <option value="">-- Select Role --</option>
+            {% for r in available_roles %}
+              <option value="{{ r.id }}">{{ r.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="vertical_id">Initial Vertical Scope</label>
+          <select id="vertical_id" name="vertical_id" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            <option value="">-- Select Vertical --</option>
+            {% for v in available_verticals %}
+              <option value="{{ v.id }}">{{ v.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit">Create User in PostgreSQL &rarr;</button>
+      </form>
+    </div>
+
+    <div>
+      <h3 class="card-title">Zero Hard-Deletion Policy</h3>
+      <p style="color: var(--text-muted); line-height: 1.8;">
+        In accordance with the OMS core architectural rules:
+      </p>
+      <ul style="color: var(--text-muted); padding-left: 1.25rem; line-height: 1.8;">
+        <li>Users are <strong>never hard-deleted</strong> from PostgreSQL.</li>
+        <li>Disabling an account transitions its status to <code>DISABLED</code>, sets <code>disabled_at</code> timestamp, and immediately revokes all active sessions.</li>
+        <li>Historical audit logs, vertical assignments, and records remain completely intact.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h3 class="card-title">Registered Users (Total: {{ users | length }})</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Username</th>
+        <th>Full Name</th>
+        <th>Status</th>
+        <th>Roles</th>
+        <th>Verticals</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in users %}
+        <tr>
+          <td><strong>{{ item.user.username }}</strong></td>
+          <td>{{ item.user.full_name }}</td>
+          <td>
+            {% if item.user.account_status.value == 'ACTIVE' %}
+              <span class="badge badge-healthy">ACTIVE</span>
+            {% else %}
+              <span class="badge badge-unhealthy">{{ item.user.account_status.value }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% for r in item.roles %}
+              <span class="badge badge-dev">{{ r.name }}</span>
+            {% else %}
+              <span style="color: var(--text-muted);">—</span>
+            {% endfor %}
+          </td>
+          <td>
+            {% for v, p in item.verticals %}
+              <span class="badge badge-healthy">{{ v.name }}</span>
+            {% else %}
+              <span style="color: var(--text-muted);">—</span>
+            {% endfor %}
+          </td>
+          <td>
+            <form action="/dev/users/{{ item.user.id }}/toggle-status" method="POST" style="display: inline;">
+              {% if item.user.account_status.value == 'ACTIVE' %}
+                <button type="submit" style="padding: 0.25rem 0.6rem; font-size: 0.75rem; background: #dc2626;">Disable</button>
+              {% else %}
+                <button type="submit" style="padding: 0.25rem 0.6rem; font-size: 0.75rem; background: #10b981;">Enable</button>
+              {% endif %}
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

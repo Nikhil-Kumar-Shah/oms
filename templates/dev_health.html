@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+  <h2>🩺 System Health & Infrastructure Diagnostics</h2>
+  <p class="subtitle">Real-time status of FastAPI runtime, PostgreSQL database pooling, and core environment configuration.</p>
+
+  <div class="grid grid-2" style="margin-bottom: 2rem;">
+    <div class="card">
+      <h3>🚀 FastAPI Runtime</h3>
+      <table style="margin-top: 1rem;">
+        <tr><td><strong>Application</strong></td><td>{{ app_health.app }}</td></tr>
+        <tr><td><strong>Version</strong></td><td>{{ app_health.version }}</td></tr>
+        <tr><td><strong>Status</strong></td><td><span class="badge badge-success">{{ app_health.status }}</span></td></tr>
+        <tr><td><strong>Environment</strong></td><td>{{ settings.ENVIRONMENT }}</td></tr>
+        <tr><td><strong>Debug Mode</strong></td><td>{{ 'Enabled' if settings.DEBUG else 'Disabled' }}</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>🐘 PostgreSQL Connection Pool</h3>
+      <table style="margin-top: 1rem;">
+        <tr><td><strong>Database Status</strong></td><td><span class="badge {% if db_health.status == 'connected' %}badge-success{% else %}badge-danger{% endif %}">{{ db_health.status }}</span></td></tr>
+        <tr><td><strong>Pool Size</strong></td><td>{{ db_health.pool_size }} connections</td></tr>
+        <tr><td><strong>Checked In</strong></td><td>{{ db_health.checked_in }}</td></tr>
+        <tr><td><strong>Checked Out</strong></td><td>{{ db_health.checked_out }}</td></tr>
+        <tr><td><strong>Overflow</strong></td><td>{{ db_health.overflow }}</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>⚙️ Security & Session Settings</h3>
+    <table>
+      <tr><td><strong>Session Cookie Name</strong></td><td><code>{{ settings.SESSION_COOKIE_NAME }}</code></td></tr>
+      <tr><td><strong>Cookie Secure Flag</strong></td><td>{{ settings.SESSION_COOKIE_SECURE }}</td></tr>
+      <tr><td><strong>Cookie HttpOnly</strong></td><td>{{ settings.SESSION_COOKIE_HTTPONLY }}</td></tr>
+      <tr><td><strong>Session TTL</strong></td><td>{{ settings.SESSION_EXPIRE_HOURS }} hours</td></tr>
+      <tr><td><strong>Password Min Length</strong></td><td>{{ settings.PASSWORD_MIN_LENGTH }} chars</td></tr>
+    </table>
+  </div>
+</div>
+{% endblock %}

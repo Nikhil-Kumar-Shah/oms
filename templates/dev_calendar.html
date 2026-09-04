@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2 class="card-title">Master Calendar System</h2>
+
+  {% if error %}
+    <div class="alert alert-error">
+      <strong>✗ Error:</strong> {{ error }}
+    </div>
+  {% endif %}
+
+  {% if message %}
+    <div class="alert alert-success">
+      <strong>✓ Success:</strong> {{ message }}
+    </div>
+  {% endif %}
+
+  <div class="grid-2">
+    <div>
+      <h3 class="card-title">Schedule Calendar Activity</h3>
+      <form action="/dev/calendar/create" method="POST">
+        <div class="form-group">
+          <label for="title">Activity Title *</label>
+          <input type="text" id="title" name="title" required placeholder="e.g. Inter-College Football Fixture 1">
+        </div>
+        <div class="form-group">
+          <label for="activity_date">Activity Date *</label>
+          <input type="date" id="activity_date" name="activity_date" required style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+        </div>
+        <div class="form-group">
+          <label for="category">Category</label>
+          <select id="category" name="category" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            {% for c in categories %}
+              <option value="{{ c.value }}">{{ c.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="priority">Priority</label>
+          <select id="priority" name="priority" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            {% for p in priorities %}
+              <option value="{{ p.value }}" {% if p.value == 'MEDIUM' %}selected{% endif %}>{{ p.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="audience">Audience Scope</label>
+          <select id="audience" name="audience" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            {% for a in audiences %}
+              <option value="{{ a.value }}">{{ a.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="vertical_id">Vertical Division (Optional / Required if Vertical Audience)</label>
+          <select id="vertical_id" name="vertical_id" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            <option value="">-- No Vertical (Organization-wide) --</option>
+            {% for v in verticals %}
+              <option value="{{ v.id }}">{{ v.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="description">Description</label>
+          <textarea id="description" name="description" rows="2" placeholder="Activity objectives and location..."></textarea>
+        </div>
+        <button type="submit">Schedule Activity in PostgreSQL &rarr;</button>
+      </form>
+    </div>
+
+    <div>
+      <h3 class="card-title">Audience Scope Enforcement</h3>
+      <ul style="color: var(--text-muted); padding-left: 1.25rem; line-height: 1.8;">
+        <li><strong>Server-Side Filtering:</strong> Visibility is computed strictly on the server based on the user's role and assigned verticals.</li>
+        <li><strong>Audience Types:</strong> <code>ALL</code>, <code>ORGANIZATION</code>, <code>VERTICAL</code>, <code>SPECIFIC_USERS</code>.</li>
+        <li><strong>Non-Destructive Lifecycle:</strong> Cancelled calendar events remain preserved in PostgreSQL for institutional memory.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h3 class="card-title">Scheduled Activities (Total: {{ entries | length }})</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Activity Title</th>
+        <th>Category</th>
+        <th>Audience</th>
+        <th>Vertical</th>
+        <th>Priority</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in entries %}
+        <tr>
+          <td style="font-size: 0.85rem; color: #60a5fa;"><strong>{{ e.activity_date }}</strong></td>
+          <td><strong>{{ e.title }}</strong></td>
+          <td><span class="badge badge-dev">{{ e.category.value }}</span></td>
+          <td><span style="font-size: 0.8rem;">{{ e.audience.value }}</span></td>
+          <td>{{ e.vertical.name if e.vertical else 'Global' }}</td>
+          <td>
+            {% if e.priority.value == 'CRITICAL' %}
+              <span class="badge badge-unhealthy">CRITICAL</span>
+            {% else %}
+              <span class="badge badge-dev">{{ e.priority.value }}</span>
+            {% endif %}
+          </td>
+          <td><span class="badge badge-healthy">{{ e.status.value }}</span></td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">No calendar activities scheduled yet.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

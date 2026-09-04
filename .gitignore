@@ -1,0 +1,101 @@
+# ==============================================================================
+# Paradox Sports OMS - Production Repository Git Ignore (.gitignore)
+# ==============================================================================
+
+# --- Secrets & Environment Configuration Files ---
+# Never commit actual production, staging, or development credentials
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+*.env
+!*.env.example
+!.env.example
+!deployment/*.env.example
+!frontend/.env.example
+
+# --- Database Dumps & Backups ---
+backups/*.sql
+backups/*.sql.gz
+backups/*.sql.gz.meta.json
+*.dump
+*.sqlite3
+
+# --- Python & Virtual Environments ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# --- Pytest & Coverage ---
+.pytest_cache/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# --- Node.js & Next.js Artifacts ---
+node_modules/
+frontend/node_modules/
+.next/
+frontend/.next/
+out/
+frontend/out/
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+
+# --- Logs & Runtime Artifacts ---
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+*.pid
+*.seed
+*.pid.lock
+
+# --- OS & IDE Temporary Files ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace

@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2 class="card-title">Unified My Work &mdash; Operational Workspace</h2>
+  {% if current_user %}
+    <div class="alert alert-success">
+      <strong>Server-Authoritative Session:</strong> Workload aggregated for <code>{{ current_user.username }}</code> ({{ current_user.full_name }}).
+    </div>
+  {% else %}
+    <div class="alert alert-error">
+      <strong>Authentication Required:</strong> Please <a href="/dev/auth" style="color: #60a5fa;">login</a> to access your personal workspace.
+    </div>
+  {% endif %}
+
+  {% if my_work %}
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin: 1rem 0;">
+      <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 1rem; text-align: center;">
+        <div style="font-size: 1.8rem; font-weight: bold; color: #10b981;">{{ my_work.stats.active_tasks }}</div>
+        <div style="font-size: 0.85rem; color: var(--text-muted);">Active Tasks</div>
+      </div>
+      <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 1rem; text-align: center;">
+        <div style="font-size: 1.8rem; font-weight: bold; color: #3b82f6;">{{ my_work.stats.pending_directives }}</div>
+        <div style="font-size: 0.85rem; color: var(--text-muted);">Directives Pending</div>
+      </div>
+      <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 8px; padding: 1rem; text-align: center;">
+        <div style="font-size: 1.8rem; font-weight: bold; color: #8b5cf6;">{{ my_work.stats.upcoming_meetings }}</div>
+        <div style="font-size: 0.85rem; color: var(--text-muted);">Meetings</div>
+      </div>
+      <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 1rem; text-align: center;">
+        <div style="font-size: 1.8rem; font-weight: bold; color: #f59e0b;">{{ my_work.stats.event_duties }}</div>
+        <div style="font-size: 0.85rem; color: var(--text-muted);">Event Duties</div>
+      </div>
+      <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 1rem; text-align: center;">
+        <div style="font-size: 1.8rem; font-weight: bold; color: #ef4444;">{{ my_work.stats.blocked_tasks }}</div>
+        <div style="font-size: 0.85rem; color: var(--text-muted);">Blockers</div>
+      </div>
+      <div style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); border-radius: 8px; padding: 1rem; text-align: center;">
+        <div style="font-size: 1.8rem; font-weight: bold; color: #f43f5e;">{{ my_work.stats.overdue_tasks }}</div>
+        <div style="font-size: 0.85rem; color: var(--text-muted);">Overdue</div>
+      </div>
+    </div>
+  {% endif %}
+</div>
+
+<!-- Section 1: Assigned Tasks -->
+<div class="card">
+  <h3 class="card-title">Assigned Tasks ({% if my_work %}{{ my_work.tasks | length }}{% else %}0{% endif %})</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Vertical</th>
+        <th>Priority</th>
+        <th>Status</th>
+        <th>Health</th>
+        <th>Deadline</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if my_work and my_work.tasks %}
+        {% for t in my_work.tasks %}
+          <tr>
+            <td><strong>{{ t.title }}</strong></td>
+            <td><span class="badge badge-dev">{{ t.vertical_name or '—' }}</span></td>
+            <td><span class="badge badge-dev">{{ t.priority.value }}</span></td>
+            <td><span class="badge badge-healthy">{{ t.status.value }}</span></td>
+            <td><span class="badge {% if t.health.value == 'BLOCKED' or t.health.value == 'OVERDUE' %}badge-unhealthy{% else %}badge-healthy{% endif %}">{{ t.health.value }}</span></td>
+            <td style="font-size: 0.85rem; color: var(--text-muted);">{{ t.deadline.strftime('%Y-%m-%d %H:%M') if t.deadline else '—' }}</td>
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No active tasks assigned.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Section 2: Pending Directives & Upcoming Meetings -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+  <div class="card">
+    <h3 class="card-title">Pending Directives ({% if my_work %}{{ my_work.pending_directives | length }}{% else %}0{% endif %})</h3>
+    <table>
+      <thead>
+        <tr><th>Directive</th><th>Priority</th><th>Deadline</th></tr>
+      </thead>
+      <tbody>
+        {% if my_work and my_work.pending_directives %}
+          {% for d in my_work.pending_directives %}
+            <tr>
+              <td><strong>{{ d.title }}</strong><br><small style="color: var(--text-muted);">{{ d.summary }}</small></td>
+              <td><span class="badge badge-dev">{{ d.priority.value }}</span></td>
+              <td style="font-size: 0.85rem;">{{ d.deadline.strftime('%Y-%m-%d') if d.deadline else '—' }}</td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">All directives acknowledged.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3 class="card-title">Upcoming Meetings ({% if my_work %}{{ my_work.meetings | length }}{% else %}0{% endif %})</h3>
+    <table>
+      <thead>
+        <tr><th>Meeting</th><th>Date</th><th>RSVP</th></tr>
+      </thead>
+      <tbody>
+        {% if my_work and my_work.meetings %}
+          {% for m in my_work.meetings %}
+            <tr>
+              <td><strong>{{ m.title }}</strong><br><small style="color: var(--text-muted);">{{ m.meeting_type.value }}</small></td>
+              <td style="font-size: 0.85rem;">{{ m.meeting_date }} {{ m.start_time or '' }}</td>
+              <td><span class="badge badge-healthy">{{ m.rsvp_status.value }}</span></td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No upcoming meetings.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Section 3: Event Duties -->
+<div class="card">
+  <h3 class="card-title">Assigned Event Duties ({% if my_work %}{{ my_work.event_duties | length }}{% else %}0{% endif %})</h3>
+  <table>
+    <thead>
+      <tr><th>Event</th><th>Date</th><th>Assigned Role</th><th>Status</th><th>Location</th></tr>
+    </thead>
+    <tbody>
+      {% if my_work and my_work.event_duties %}
+        {% for ev in my_work.event_duties %}
+          <tr>
+            <td><strong>{{ ev.title }}</strong></td>
+            <td>{{ ev.planned_date }}</td>
+            <td><span class="badge badge-dev">{{ ev.role.value }}</span></td>
+            <td><span class="badge badge-healthy">{{ ev.event_status.value }}</span></td>
+            <td>{{ ev.location or '—' }}</td>
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No event duty assignments.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

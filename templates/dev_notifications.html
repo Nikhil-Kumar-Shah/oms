@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+  <h2>🔔 Personal Notifications & Attention Center</h2>
+  <p class="subtitle">System-generated attention events for tasks, directives, announcements, meetings, and governance transfers.</p>
+
+  {% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
+  {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+  {% if current_user %}
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+      <div>
+        <span class="badge badge-info">Total: {{ total }}</span>
+        <span class="badge {% if unread_count > 0 %}badge-danger{% else %}badge-success{% endif %}">Unread: {{ unread_count }}</span>
+      </div>
+      {% if unread_count > 0 %}
+        <form action="/dev/notifications/read-all" method="POST" style="margin: 0;">
+          <button type="submit" style="padding: 0.35rem 0.8rem; font-size: 0.85rem; background: #3b82f6;">Mark All As Read</button>
+        </form>
+      {% endif %}
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+      {% for n in notifications %}
+        <div class="card" style="padding: 1rem; border-left: 4px solid {% if n.read_status.value == 'UNREAD' %}#3b82f6{% else %}#475569{% endif %}; background: {% if n.read_status.value == 'UNREAD' %}#1e293b{% else %}#0f172a{% endif %};">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div>
+              <strong style="font-size: 0.95rem; color: #f8fafc;">{{ n.title }}</strong>
+              <span class="badge badge-dev" style="margin-left: 0.5rem; font-size: 0.7rem;">{{ n.notification_type.value }}</span>
+            </div>
+            <span style="font-size: 0.75rem; color: #9ca3af;">{{ n.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+          </div>
+          <p style="margin: 0.5rem 0 0 0; font-size: 0.88rem; color: #cbd5e1;">{{ n.message }}</p>
+        </div>
+      {% else %}
+        <div class="card" style="text-align: center; color: #9ca3af;">You have no notifications.</div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="card" style="text-align: center;">
+      <p style="color: #9ca3af;">Please log in to inspect your personal notification roster.</p>
+      <a href="/dev/auth"><button type="button">Log In &rarr;</button></a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

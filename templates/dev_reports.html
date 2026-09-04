@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h2 class="card-title">Daily & Weekly Work Reports</h2>
+
+  {% if error %}
+    <div class="alert alert-error">
+      <strong>✗ Error:</strong> {{ error }}
+    </div>
+  {% endif %}
+
+  {% if message %}
+    <div class="alert alert-success">
+      <strong>✓ Success:</strong> {{ message }}
+    </div>
+  {% endif %}
+
+  <div class="grid-2">
+    <div>
+      <h3 class="card-title">Submit Daily Work Report</h3>
+      <form action="/dev/reports/daily/submit" method="POST">
+        <div class="form-group">
+          <label for="report_date">Report Date *</label>
+          <input type="date" id="report_date" name="report_date" required value="{{ today }}" style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+        </div>
+        <div class="form-group">
+          <label for="vertical_id">Vertical Division *</label>
+          <select id="vertical_id" name="vertical_id" required style="width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+            {% for v in verticals %}
+              <option value="{{ v.id }}">{{ v.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="work_summary">Work Summary *</label>
+          <textarea id="work_summary" name="work_summary" rows="3" required placeholder="Summary of operational actions executed today..."></textarea>
+        </div>
+        <div class="form-group">
+          <label for="tasks_completed">Completed Tasks / Highlights</label>
+          <textarea id="tasks_completed" name="tasks_completed" rows="2" placeholder="List of completed work items..."></textarea>
+        </div>
+        <div class="form-group">
+          <label for="blockers">Blockers / Obstacles</label>
+          <input type="text" id="blockers" name="blockers" placeholder="Any operational impediments...">
+        </div>
+        <div class="form-group">
+          <label for="next_actions">Priorities for Next Shift</label>
+          <input type="text" id="next_actions" name="next_actions" placeholder="Immediate next deliverables...">
+        </div>
+        <button type="submit">Submit Daily Report to PostgreSQL &rarr;</button>
+      </form>
+    </div>
+
+    <div>
+      <h3 class="card-title">Report Integrity & Supervisor Review Rules</h3>
+      <ul style="color: var(--text-muted); padding-left: 1.25rem; line-height: 1.8;">
+        <li><strong>Unique Daily Submission:</strong> Enforces unique constraint <code>(user_id, report_date)</code>.</li>
+        <li><strong>Strict Self-Review Prohibition:</strong> Authors are prevented from reviewing, approving, or returning their own work reports.</li>
+        <li><strong>Supervisor Authority:</strong> Only authenticated reviewers with supervisor roles/permissions can execute review decisions.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h3 class="card-title">Daily Reports Stream (Total: {{ daily_reports | length }})</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>User</th>
+        <th>Vertical</th>
+        <th>Summary</th>
+        <th>Status</th>
+        <th>Reviewer</th>
+        <th>Review Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in daily_reports %}
+        <tr>
+          <td style="font-size: 0.85rem; color: #60a5fa;"><strong>{{ r.report_date }}</strong></td>
+          <td><strong>{{ r.user.username if r.user else '—' }}</strong></td>
+          <td><span class="badge badge-dev">{{ r.vertical.name if r.vertical else '—' }}</span></td>
+          <td style="font-size: 0.85rem; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            {{ r.work_summary }}
+          </td>
+          <td>
+            {% if r.status.value == 'REVIEWED' %}
+              <span class="badge badge-healthy">REVIEWED</span>
+            {% elif r.status.value == 'RETURNED' or r.status.value == 'FLAGGED' %}
+              <span class="badge badge-unhealthy">{{ r.status.value }}</span>
+            {% else %}
+              <span class="badge badge-dev">{{ r.status.value }}</span>
+            {% endif %}
+          </td>
+          <td style="font-size: 0.85rem; color: var(--text-muted);">{{ r.reviewer.username if r.reviewer else 'Pending' }}</td>
+          <td>
+            {% if r.status.value == 'SUBMITTED' %}
+              <form action="/dev/reports/daily/{{ r.id }}/review" method="POST" style="display: inline;">
+                <input type="hidden" name="status" value="REVIEWED">
+                <input type="hidden" name="review_comments" value="Approved by supervisor via Dev UI">
+                <button type="submit" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; background: #10b981;">Approve</button>
+              </form>
+              <form action="/dev/reports/daily/{{ r.id }}/review" method="POST" style="display: inline; margin-left: 0.25rem;">
+                <input type="hidden" name="status" value="RETURNED">
+                <input type="hidden" name="review_comments" value="Returned for clarification">
+                <button type="submit" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; background: #ef4444;">Return</button>
+              </form>
+            {% else %}
+              <span style="font-size: 0.8rem; color: var(--text-muted);">Processed</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">No daily reports submitted yet.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

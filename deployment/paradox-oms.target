@@ -1,0 +1,7 @@
+[Unit]
+Description=Paradox Sports OMS Master Target (Frontend + Backend Stack)
+After=network.target postgresql.service
+Wants=paradox-backend.service paradox-frontend.service
+
+[Install]
+WantedBy=multi-user.target
