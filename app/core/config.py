@@ -101,6 +101,19 @@ class Settings(BaseSettings):
                 "DATABASE_URL must be a valid PostgreSQL connection string starting with "
                 "'postgresql://' or 'postgresql+psycopg2://'. SQLite or other engines are not permitted."
             )
+        # Automatically sanitize and percent-encode password characters like '@' in URI
+        try:
+            import urllib.parse
+            proto, rest = v.split("://", 1)
+            if "@" in rest:
+                auth_part, host_part = rest.rsplit("@", 1)
+                if ":" in auth_part:
+                    user, password = auth_part.split(":", 1)
+                    # Unquote first to avoid double encoding, then quote special characters
+                    clean_password = urllib.parse.quote_plus(urllib.parse.unquote(password))
+                    v = f"{proto}://{user}:{clean_password}@{host_part}"
+        except Exception:
+            pass
         return v
 
     @field_validator("ALLOWED_HOSTS", "CORS_ORIGINS", mode="before")
