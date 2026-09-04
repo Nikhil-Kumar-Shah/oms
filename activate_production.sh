@@ -131,10 +131,10 @@ if ! id -u "$APP_USER" &>/dev/null; then
 fi
 
 mkdir -p "$TARGET_DIR" "$CONFIG_DIR" "$LOG_DIR" /var/www/certbot
-chown -R "$APP_USER:$APP_USER" "$TARGET_DIR" "$LOG_DIR" /var/www/certbot
+chown -R "$APP_USER:$APP_USER" "$TARGET_DIR" "$CONFIG_DIR" "$LOG_DIR" /var/www/certbot
 chmod 755 "$TARGET_DIR"
 chmod 750 "$LOG_DIR"
-chmod 700 "$CONFIG_DIR"
+chmod 755 "$CONFIG_DIR"
 
 # Allow git operations in this repository across users
 git config --system --add safe.directory "$TARGET_DIR" 2>/dev/null || git config --global --add safe.directory "$TARGET_DIR" 2>/dev/null || true
@@ -225,15 +225,27 @@ NEXT_PUBLIC_APP_ENV="production"
 NEXT_PUBLIC_API_BASE_URL="/api/v1"
 EOF
   chown "$APP_USER:$APP_USER" "${CONFIG_DIR}/frontend.production.env"
-  chmod 600 "${CONFIG_DIR}/frontend.production.env"
+  chmod 644 "${CONFIG_DIR}/frontend.production.env"
   echo -e "  ${GREEN}[✓]${RESET} Created ${CONFIG_DIR}/frontend.production.env."
 else
   echo -e "  ${GREEN}[✓]${RESET} Found existing ${CONFIG_DIR}/frontend.production.env."
 fi
 
-# Link /etc/paradox-oms/production.env to /opt/paradox-oms/.env for python scripts
-ln -sf "${CONFIG_DIR}/production.env" "${TARGET_DIR}/.env"
-ln -sf "${CONFIG_DIR}/frontend.production.env" "${TARGET_DIR}/frontend/.env.local"
+# Ensure correct permissions on configuration directory and files
+chown -R "$APP_USER:$APP_USER" "$CONFIG_DIR"
+chmod 755 "$CONFIG_DIR"
+chmod 600 "${CONFIG_DIR}/production.env" 2>/dev/null || true
+chmod 644 "${CONFIG_DIR}/frontend.production.env" 2>/dev/null || true
+
+# Copy configuration files directly to avoid symlink cross-directory access restrictions
+rm -f "${TARGET_DIR}/.env" "${TARGET_DIR}/frontend/.env.local" "${TARGET_DIR}/frontend/.env.production.local"
+cp "${CONFIG_DIR}/production.env" "${TARGET_DIR}/.env"
+cp "${CONFIG_DIR}/frontend.production.env" "${TARGET_DIR}/frontend/.env.local"
+cp "${CONFIG_DIR}/frontend.production.env" "${TARGET_DIR}/frontend/.env.production.local"
+
+chown "$APP_USER:$APP_USER" "${TARGET_DIR}/.env" "${TARGET_DIR}/frontend/.env.local" "${TARGET_DIR}/frontend/.env.production.local"
+chmod 600 "${TARGET_DIR}/.env"
+chmod 644 "${TARGET_DIR}/frontend/.env.local" "${TARGET_DIR}/frontend/.env.production.local"
 
 # ------------------------------------------------------------------------------
 # STEP 5: Python Backend Virtual Environment & Package Installation
