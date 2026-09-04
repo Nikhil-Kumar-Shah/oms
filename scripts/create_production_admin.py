@@ -34,7 +34,11 @@ from app.models.user import User, AccountStatus
 from app.models.rbac import Role, Permission, RolePermission, UserRole
 from app.models.organization import Organization, Vertical, VerticalStatus, UserVertical
 from app.models.audit import AuditLog
-from app.services.rbac_service import CANONICAL_ROLES, CORE_PERMISSIONS
+from app.services.rbac_service import (
+    CANONICAL_ROLES,
+    CORE_PERMISSIONS,
+    ensure_canonical_roles_and_permissions,
+)
 
 
 EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
@@ -82,38 +86,9 @@ def ensure_rbac_foundation(db) -> tuple[Role, Organization, Optional[Vertical]]:
     stmt = select(Vertical).where(Vertical.organization_id == org.id).limit(1)
     vertical = db.scalar(stmt)
 
-    # 3. Permissions
-    perm_map = {}
-    for code, desc, category in CORE_PERMISSIONS:
-        stmt = select(Permission).where(Permission.code == code)
-        perm = db.scalar(stmt)
-        if not perm:
-            perm = Permission(id=uuid.uuid4(), code=code, description=desc, category=category)
-            db.add(perm)
-            db.flush()
-        perm_map[code] = perm
-
-    # 4. Canonical Roles & ADMIN mapping
-    stmt = select(Role).where(Role.name == "ADMIN")
-    admin_role = db.scalar(stmt)
-    if not admin_role:
-        admin_role = Role(
-            id=uuid.uuid4(),
-            name="ADMIN",
-            description="System Administrator with full operational & governance authority",
-            is_system=True,
-        )
-        db.add(admin_role)
-        db.flush()
-
-    # Ensure ADMIN has all permissions
-    for code, perm_obj in perm_map.items():
-        stmt = select(RolePermission).where(
-            RolePermission.role_id == admin_role.id,
-            RolePermission.permission_id == perm_obj.id,
-        )
-        if not db.scalar(stmt):
-            db.add(RolePermission(role_id=admin_role.id, permission_id=perm_obj.id))
+    # 3. Canonical Roles & Permissions Registry
+    role_map = ensure_canonical_roles_and_permissions(db)
+    admin_role = role_map["ADMIN"]
 
     db.flush()
     return admin_role, org, vertical

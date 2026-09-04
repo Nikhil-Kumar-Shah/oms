@@ -238,12 +238,17 @@ export default function AdminUsersPage() {
         createdUsername = teamProfile.username || formData.username;
         setSuccessMsg(`Successfully created Event Team account '@${createdUsername}' in Pending Activation state. Sports Core or Deputy Core must assign an Event and Head POC to activate.`);
       } else {
+        if (!matchedRole) {
+          setCreateError(`Target role '${targetRole}' is not registered in the system. Please refresh the page.`);
+          setCreateLoading(false);
+          return;
+        }
         const payload: UserCreateInput = {
           username: formData.username.trim().toLowerCase(),
           full_name: formData.full_name.trim(),
           email: formData.email.trim() ? formData.email.trim().toLowerCase() : undefined,
           password: formData.password,
-          role_ids: matchedRole ? [matchedRole.id] : undefined,
+          role_ids: [matchedRole.id],
           vertical_ids: formData.vertical_id ? [formData.vertical_id] : undefined,
         };
         const newUser = await adminApi.createUser(payload);
@@ -315,7 +320,7 @@ export default function AdminUsersPage() {
     try {
       const targetRoleObj = availableRoles.find((r) => r.name === selectedRoleName);
       if (!targetRoleObj) {
-        setRoleError('Target role was not found in canonical role registry.');
+        setRoleError(`Target role '${selectedRoleName}' was not found in canonical role registry. Please refresh the page.`);
         setRoleLoading(false);
         return;
       }
@@ -588,7 +593,7 @@ export default function AdminUsersPage() {
                   </thead>
                   <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
                     {users.map((u) => {
-                      const primaryRole = u.roles[0]?.name || 'VOLUNTEER';
+                      const primaryRole = u.roles[0]?.name;
                       const primaryVert = u.verticals.find((v) => v.is_primary) || u.verticals[0];
 
                       return (
@@ -610,7 +615,13 @@ export default function AdminUsersPage() {
                             </div>
                           </td>
                           <td className="py-3 px-4">
-                            <Badge role={primaryRole} size="sm" />
+                            {primaryRole ? (
+                              <Badge role={primaryRole} size="sm" />
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border border-zinc-200 dark:border-zinc-700">
+                                Unassigned
+                              </span>
+                            )}
                           </td>
                           <td className="py-3 px-4">
                             {primaryVert ? (
@@ -1248,7 +1259,13 @@ export default function AdminUsersPage() {
                 <div>
                   <span className="text-zinc-500 dark:text-zinc-400 block font-medium">Canonical Role</span>
                   <div className="mt-0.5">
-                    <Badge role={selectedUser.roles[0]?.name || 'VOLUNTEER'} size="sm" />
+                    {selectedUser.roles[0]?.name ? (
+                      <Badge role={selectedUser.roles[0].name} size="sm" />
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border border-zinc-200 dark:border-zinc-700">
+                        Unassigned
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

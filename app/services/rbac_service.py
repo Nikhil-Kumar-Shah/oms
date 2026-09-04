@@ -129,6 +129,117 @@ CORE_PERMISSIONS = [
     ("reports.admin", "Generate and export administrative reports", "reports"),
 ]
 
+DEFAULT_ROLE_PERMISSIONS: Dict[str, List[str]] = {
+    "ADMIN": [code for code, _, _ in CORE_PERMISSIONS],
+    "SPORTS_CORE": [
+        code for code, _, _ in CORE_PERMISSIONS
+        if code not in ("system.read", "config.update")
+    ],
+    "DEPUTY_CORE": [
+        code for code, _, _ in CORE_PERMISSIONS
+        if code not in ("system.read", "config.read", "config.update", "analytics.admin", "reports.admin", "users.disable", "verticals.disable")
+    ],
+    "SUPER_COORDINATOR": [
+        "users.read", "verticals.read", "verticals.assign",
+        "tasks.read", "tasks.create", "tasks.update", "tasks.assign", "tasks.transition",
+        "calendar.read", "calendar.create", "calendar.update",
+        "issues.read", "issues.create", "issues.update", "issues.escalate",
+        "reports.read", "reports.submit", "reports.review", "reports.weekly.read", "reports.weekly.submit", "reports.weekly.review",
+        "events.read", "events.update", "events.team.manage", "events.poc.manage", "event_teams.read", "events.readiness.manage",
+        "requirements.read", "requirements.create", "requirements.assign", "requirements.transition", "requirements.message",
+        "meetings.read", "meetings.create", "meetings.update", "meetings.rsvp",
+        "forms.read", "forms.create", "forms.update", "forms.publish", "forms.submit", "forms.review",
+        "announcements.read", "announcements.create", "announcements.update", "announcements.publish",
+        "directives.read", "directives.acknowledge",
+        "notifications.read", "notifications.manage",
+        "communications.read", "communications.create", "communications.update",
+        "transfers.read", "transfers.request", "transfers.approve",
+        "analytics.read",
+    ],
+    "COORDINATOR": [
+        "users.read", "verticals.read",
+        "tasks.read", "tasks.create", "tasks.update", "tasks.assign", "tasks.transition",
+        "calendar.read", "calendar.create", "calendar.update",
+        "issues.read", "issues.create", "issues.update", "issues.escalate",
+        "reports.read", "reports.submit", "reports.review", "reports.weekly.read", "reports.weekly.submit",
+        "events.read", "event_teams.read", "events.readiness.manage",
+        "requirements.read", "requirements.create", "requirements.assign", "requirements.transition", "requirements.message",
+        "meetings.read", "meetings.create", "meetings.update", "meetings.rsvp",
+        "forms.read", "forms.submit", "forms.review",
+        "announcements.read", "announcements.create",
+        "directives.read", "directives.acknowledge",
+        "notifications.read", "notifications.manage",
+        "communications.read", "communications.create",
+        "transfers.read", "transfers.request",
+        "analytics.read",
+    ],
+    "VOLUNTEER": [
+        "users.read", "verticals.read",
+        "tasks.read", "tasks.transition",
+        "calendar.read",
+        "issues.read", "issues.create",
+        "reports.read", "reports.submit",
+        "events.read",
+        "requirements.read", "requirements.message",
+        "meetings.read", "meetings.rsvp",
+        "forms.read", "forms.submit",
+        "announcements.read",
+        "directives.read", "directives.acknowledge",
+        "notifications.read", "notifications.manage",
+    ],
+    "EVENT_TEAM": [
+        "events.read",
+        "event_teams.read",
+        "requirements.read", "requirements.create", "requirements.message",
+        "meetings.read", "meetings.rsvp",
+        "forms.read", "forms.submit",
+        "announcements.read",
+        "directives.read", "directives.acknowledge",
+        "notifications.read", "notifications.manage",
+    ],
+}
+
+
+def ensure_canonical_roles_and_permissions(db: Session) -> Dict[str, Role]:
+    """
+    Ensures all 84 permissions, 7 canonical roles, and baseline role-permission mappings
+    exist in the database. Idempotent and safe to run on every startup or migration.
+    """
+    perm_map: Dict[str, Permission] = {}
+    for code, desc, cat in CORE_PERMISSIONS:
+        stmt = select(Permission).where(Permission.code == code)
+        perm = db.scalar(stmt)
+        if not perm:
+            perm = Permission(id=uuid.uuid4(), code=code, description=desc, category=cat)
+            db.add(perm)
+            db.flush()
+        perm_map[code] = perm
+
+    role_map: Dict[str, Role] = {}
+    for rname, rdesc in CANONICAL_ROLES:
+        stmt = select(Role).where(Role.name == rname)
+        role = db.scalar(stmt)
+        if not role:
+            role = Role(id=uuid.uuid4(), name=rname, description=rdesc, is_system=True)
+            db.add(role)
+            db.flush()
+        role_map[rname] = role
+
+        # Ensure baseline permissions for this role
+        assigned_codes = DEFAULT_ROLE_PERMISSIONS.get(rname, [])
+        for pcode in assigned_codes:
+            perm = perm_map.get(pcode)
+            if perm:
+                stmt_rp = select(RolePermission).where(
+                    RolePermission.role_id == role.id,
+                    RolePermission.permission_id == perm.id,
+                )
+                if not db.scalar(stmt_rp):
+                    db.add(RolePermission(role_id=role.id, permission_id=perm.id))
+
+    db.flush()
+    return role_map
+
 
 class RbacService:
     """Manages roles, permissions, and calculates server-authoritative effective permissions."""

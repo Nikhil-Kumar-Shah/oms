@@ -85,8 +85,12 @@ async def lifespan(app: FastAPI):
             f"PostgreSQL connection verified successfully. "
             f"Latency: {health_info.get('latency_ms')}ms"
         )
-        from app.core.database import sync_database_enums
+        from app.core.database import SessionLocal, sync_database_enums
         sync_database_enums()
+        from app.services.rbac_service import ensure_canonical_roles_and_permissions
+        with SessionLocal() as db_session:
+            ensure_canonical_roles_and_permissions(db_session)
+            db_session.commit()
     except Exception as exc:
         logger.critical(f"FATAL: PostgreSQL database is unreachable on startup: {exc}")
 
