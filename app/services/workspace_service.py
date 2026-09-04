@@ -342,7 +342,7 @@ class WorkspaceService:
             elif ev.event_head_id == current_user.id:
                 role = EventMemberRole.HEAD
             elif mem:
-                role = mem.role
+                role = getattr(mem, "role_in_event", getattr(mem, "role", EventMemberRole.MEMBER))
             else:
                 role = EventMemberRole.MEMBER
 
